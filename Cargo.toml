@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "common",
+    "availability-oracle",
+]
+
+[patch.'https://github.com/graphprotocol/eip-712-derive']
+#eip-712-derive = { path = "../eip-712-derive" }
+
+[patch.'https://github.com/graphprotocol/solidity-bindgen']
+#solidity-bindgen = { path = "../solidity-bindgen/solidity-bindgen" }

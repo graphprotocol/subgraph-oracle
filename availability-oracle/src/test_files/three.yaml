@@ -1,0 +1,26 @@
+specVersion: 0.0.2
+schema:
+  file:
+    /: QmWt3schemazzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+dataSources:
+  - kind: ethereum/contract
+    name: Contract
+    network: mainnet
+    source:
+      address: "0xCfEB869F69431e42cdB54A4F4f105C19C080A601"
+      abi: Contract
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.4
+      language: wasm/assemblyscript
+      abis:
+        - name: Contract
+          file:
+            /: QmWt3unavzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+      entities:
+        - Call
+      eventHandlers:
+        - event: Trigger(uint16)
+          handler: handleTrigger
+      file:
+        /: QmWt3wasmzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz

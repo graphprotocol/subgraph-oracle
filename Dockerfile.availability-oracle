@@ -1,0 +1,13 @@
+FROM rust:latest as build
+
+# Copy and build the project
+WORKDIR /availability-oracle/src
+COPY . ./
+RUN cargo install --locked --path availability-oracle
+
+## Clean up the source directory
+RUN rm -rf /src
+
+USER 1000
+ENTRYPOINT ["/usr/local/cargo/bin/availability-oracle"]
+CMD ["--ipfs", "https://ipfs.network.thegraph.com", "--subgraph", "https://gateway.network.thegraph.com/network", "--period", "300"]

@@ -1,0 +1,28 @@
+[package]
+name = "availability-oracle"
+version = "0.2.0"
+authors = ["Leonardo Yvens <leoyvens@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = { path = "../common" }
+async-trait = "0.1.50"
+tokio = { version = "1.10", features = ["macros", "sync", "time"] }
+serde_yaml = "0.8.13"
+reqwest = { version = "0.11.4", features = ["json"] }
+serde_derive = "1.0.116"
+serde = "1.0.116"
+serde_json = "1.0.57"
+tiny-cid = "0.3"
+bytes = "1.0"
+clap = "2.33"
+structopt = "0.3.18"
+hex = "0.4.2"
+slog = { version = "2.5.2", features = ["release_max_level_trace", "max_level_trace"] }
+ethabi = "17.0.0"
+wasmparser = "0.74.0"
+multibase = "0.8.0"
+moka = { version = "0.8", features = ["future"] }
+graphql-parser = "0.4.0"

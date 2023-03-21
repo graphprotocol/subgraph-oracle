@@ -1,0 +1,57 @@
+name: Build Availability Oracle
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  BASE_IMAGE: ghcr.io/edgeandnode/availability-oracle
+  DOCKERFILE: Dockerfile.availability-oracle
+  APP: availability-oracle
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Docker meta
+        id: docker_meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.BASE_IMAGE }}
+          tags: |
+            type=sha
+            type=raw,value=latest
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.cr_pat }}
+
+      - name: Build and push Docker image
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          cache-from: type=registry,ref=${{ env.BASE_IMAGE }}:latest
+          cache-to: type=inline
+          file: ${{ env.DOCKERFILE }}
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          push: true
+
+      - name: Get GKE Credentials for the staging cluster
+        uses: google-github-actions/get-gke-credentials@v0
+        with:
+          credentials: ${{ secrets.gcloud_service_account }}
+          cluster_name: staging-network
+          location: us-central1-a
+          project_id: graph-mainnet
+
+      - name: Restart staging statefulset
+        run: kubectl rollout restart sts/${{ env.APP }}
