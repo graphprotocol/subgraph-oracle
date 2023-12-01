@@ -1,10 +1,8 @@
 use super::ContractConfig;
+use crate::chain_id::{ARBITRUM_GOERLI, ARBITRUM_ONE, ARBITRUM_SEPOLIA, GOERLI, MAIN_NET, SEPOLIA};
 use crate::prelude::*;
 use anyhow::anyhow;
-use eip_712_derive::{
-    chain_id::{ARBITRUM_GOERLI, ARBITRUM_ONE, GOERLI, MAIN_NET},
-    U256,
-};
+use eip_712_derive::U256;
 use serde::{Deserialize, Deserializer};
 use serde_json;
 use std::{collections::BTreeMap, fs::File, path::Path, str::FromStr};
@@ -113,6 +111,68 @@ impl ContractConfig {
             chain_id: ARBITRUM_ONE,
         }
     }
+
+    pub fn sepolia(url: &str) -> Self {
+        Self {
+            url: url.into(),
+            graph_token: "0xCA59cCeb39bE1808d7aA607153f4A5062daF3a83"
+                .parse()
+                .unwrap(),
+            epoch_manager: "0x3C39036a76104D7c6D3eF13a21477C0fE23A3Aa2"
+                .parse()
+                .unwrap(),
+            dispute_manager: "0x1Da0DF3435cde4199650D35690E3B0885dfc38B1"
+                .parse()
+                .unwrap(),
+            staking: "0x14e9B07Dc56A0B03ac8A58453B5cCCB289d6ec90"
+                .parse()
+                .unwrap(),
+            curation: "0x77A6e5F2f13218B33A97Aec56d591dB18D60FFb1"
+                .parse()
+                .unwrap(),
+            rewards_manager: "0x175f483AfAB4Fc52A6E07F9e9d46C90eB95941b5"
+                .parse()
+                .unwrap(),
+            service_registry: "0x0Ee47634c94E6606f67301b3A868319073CB0FC2"
+                .parse()
+                .unwrap(),
+            gns: "0x5461D48556B94e7fdD8ED5A8f865Ba4F1A3b5454"
+                .parse()
+                .unwrap(),
+            chain_id: SEPOLIA,
+        }
+    }
+
+    pub fn arbitrum_sepolia(url: &str) -> Self {
+        Self {
+            url: url.into(),
+            graph_token: "0xf8c05dCF59E8B28BFD5eed176C562bEbcfc7Ac04"
+                .parse()
+                .unwrap(),
+            epoch_manager: "0x88b3C7f37253bAA1A9b95feAd69bD5320585826D"
+                .parse()
+                .unwrap(),
+            dispute_manager: "0x7C9B82717f9433932507dF6EdA93A9678b258698"
+                .parse()
+                .unwrap(),
+            staking: "0x865365C425f3A593Ffe698D9c4E6707D14d51e08"
+                .parse()
+                .unwrap(),
+            curation: "0xDe761f075200E75485F4358978FB4d1dC8644FD5"
+                .parse()
+                .unwrap(),
+            rewards_manager: "0x1F49caE7669086c8ba53CC35d1E9f80176d67E79"
+                .parse()
+                .unwrap(),
+            service_registry: "0x888541878CbDDEd880Cd58c728f1Af5C47343F86"
+                .parse()
+                .unwrap(),
+            gns: "0x3133948342F35b8699d8F94aeE064AbB76eDe965"
+                .parse()
+                .unwrap(),
+            chain_id: ARBITRUM_SEPOLIA,
+        }
+    }
 }
 
 // The idea behind having this .parse() compatible API is to be able to easily
@@ -126,8 +186,10 @@ impl FromStr for ContractConfig {
             ["mainnet", url] => ContractConfig::mainnet(url),
             ["ganache/mainnet"] => ContractConfig::ganache(MAIN_NET),
             ["goerli", url] => ContractConfig::goerli(url),
+            ["sepolia", url] => ContractConfig::sepolia(url),
             ["arbitrum-goerli", url] => ContractConfig::arbitrum_goerli(url),
             ["arbitrum-one", url] => ContractConfig::arbitrum_one(url),
+            ["arbitrum-sepolia", url] => ContractConfig::arbitrum_sepolia(url),
             _ => {
                 return Err(anyhow!("Unrecognized format. Expecting: network:url (or just network for \"ganache/mainnet\"). Got: {}", s));
             }

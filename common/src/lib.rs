@@ -1,4 +1,5 @@
 pub mod async_cache;
+pub mod chain_id;
 pub mod contracts;
 pub mod logging;
 pub mod metrics;

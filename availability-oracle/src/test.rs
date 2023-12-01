@@ -56,6 +56,7 @@ async fn test_reconcile() {
             "ethereum".into(),
             "ethereum/contract".into(),
             "file/ipfs".into(),
+            "substreams".into(),
         ],
     )
     .await
@@ -142,13 +143,13 @@ impl contract::RewardsManager for MockRewardsManager {
             })
             .collect::<Vec<_>>();
 
+        assert!(denied_status.len() == 6);
         assert_eq!(denied_status[0], (TWO.to_string(), true));
         assert_eq!(denied_status[1], (THREE.to_string(), true));
         assert_eq!(denied_status[2], (FOUR.to_string(), false));
         assert_eq!(denied_status[3], (FIVE.to_string(), true));
         assert_eq!(denied_status[4], (SIX.to_string(), true));
         assert_eq!(denied_status[5], (SEVEN.to_string(), true));
-        assert_eq!(denied_status[6], (SUBSTREAM.to_string(), true));
 
         Ok(())
     }

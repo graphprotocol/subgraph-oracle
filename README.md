@@ -1,6 +1,5 @@
 ## Subgraph Oracle
-
-The Subgraph Oracle verifies the availability of the subgraph files and does other validity checks, if a subgraph is found to be invalid it will be denied rewards in the RewardsManager contract.
+The Subgraph Oracle verifies the availability of the subgraph files and does other validity checks, if a subgraph is found to be invalid it will be denied rewards in the rewards manager contract. Usage:
 
 ```
 USAGE:
@@ -13,7 +12,7 @@ FLAGS:
 
 OPTIONS:
     -c, --contracts <contracts>
-            One of: `mainnet`, `goerli`, `arbitrum-one`, `arbitrum-goerli`, or `ganache/mainnet`. See
+            One of: `mainnet`, `goerli`, `arbitrum-one`, `arbitrum-goerli`, `ganache/mainnet`, `sepolia` or `arbitrum-sepolia`. See
             `common/src/contracts/config.rs` for the respective configurations [env: ORACLE_CONTRACTS=]
         --grace-period <grace-period>
             Grace period, in seconds from subgraph creation, for which subgraphs will not be checked [env:

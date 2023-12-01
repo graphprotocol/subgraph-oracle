@@ -18,14 +18,15 @@ pub(crate) struct Abi {
 
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct Mapping {
-    pub(crate) file: Link,
+    pub(crate) file: Option<Link>,
+    #[serde(default)]
     pub(crate) abis: Vec<Abi>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct DataSource {
     pub(crate) kind: String,
-    pub(crate) network: String,
+    pub(crate) network: Option<String>,
     pub(crate) mapping: Mapping,
 }
 

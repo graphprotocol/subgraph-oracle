@@ -87,7 +87,8 @@ struct Config {
         long,
         env = "ORACLE_CONTRACTS",
         required_unless("dry-run"),
-        help = "One of: `mainnet`, `goerli`, `arbitrum-one`, `arbitrum-goerli`, or `ganache/mainnet`. \
+        help = "One of: `mainnet`, `goerli`, `arbitrum-one`, `arbitrum-goerli`, `ganache/mainnet` \
+            `sepolia` or `arbitrum-sepolia`. \
             See `common/src/contracts/config.rs` for the respective \
             configurations"
     )]
@@ -132,7 +133,7 @@ struct Config {
     // Note: `ethereum/contract` is a valid alias for `ethereum`
     #[structopt(
         long,
-        default_value = "ethereum,ethereum/contract,file/ipfs",
+        default_value = "ethereum,ethereum/contract,file/ipfs,substreams",
         value_delimiter = ",",
         env = "SUPPORTED_DATA_SOURCE_KINDS",
         help = "a comma separated list of the supported data source kinds"
@@ -434,18 +435,20 @@ async fn check(
         // Check that:
         // - The subgraph has the same network in all data sources.
         // - That network is listed in the `supported_networks` list
-        match network {
-            None => {
+        match (network, ds_network) {
+            (None, Some(ds_network)) => {
                 if !supported_network_ids.contains(ds_network) {
                     return Err(Invalid::UnsupportedNetwork(ds_network.clone()).into());
                 }
                 network = Some(ds_network)
             }
-            Some(network) => {
+            (Some(network), Some(ds_network)) => {
                 if network != ds_network {
                     return Err(Invalid::ManifestParseError(anyhow!("mismatching networks")).into());
                 }
             }
+            // Data sources such as file data sources don't have a network
+            (_, None) => (),
         }
 
         // Check that ABIs are valid.
@@ -455,11 +458,13 @@ async fn check(
         }
 
         // Check mappings.
-        let wasm = ipfs.cat(check_link(file)?).await?;
-        if let Some(host_fn) =
-            calls_any_host_fn(&wasm, FORBIDDEN_HOST_FN_PREFIX).map_err(Invalid::WasmParseError)?
-        {
-            return Err(Invalid::ForbiddenApi(host_fn.to_string()).into());
+        if let Some(file) = file {
+            let wasm = ipfs.cat(check_link(file)?).await?;
+            if let Some(host_fn) = calls_any_host_fn(&wasm, FORBIDDEN_HOST_FN_PREFIX)
+                .map_err(Invalid::WasmParseError)?
+            {
+                return Err(Invalid::ForbiddenApi(host_fn.to_string()).into());
+            }
         }
     }
 
