@@ -24,3 +24,18 @@ dataSources:
           handler: handleTrigger
       file:
         /: QmWt3wasmzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+templates:
+  - kind: file/ipfs
+    mapping:
+      abis:
+        - file:
+            /: /ipfs/QmWt3abizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+          name: Contract
+      apiVersion: 0.0.7
+      entities:
+        - ERC721TokenMetadata
+      file:
+        /: /ipfs/QmWt3wasmzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+      handler: handler
+      language: wasm/assemblyscript
+    name: fileDsTemplate
