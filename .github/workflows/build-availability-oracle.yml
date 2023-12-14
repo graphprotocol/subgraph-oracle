@@ -8,7 +8,6 @@ on:
 env:
   BASE_IMAGE: ghcr.io/graphprotocol/availability-oracle
   DOCKERFILE: Dockerfile.availability-oracle
-  APP: availability-oracle
 
 jobs:
   build:
@@ -44,14 +43,3 @@ jobs:
           file: ${{ env.DOCKERFILE }}
           tags: ${{ steps.docker_meta.outputs.tags }}
           push: true
-
-      - name: Get GKE Credentials for the staging cluster
-        uses: google-github-actions/get-gke-credentials@v0
-        with:
-          credentials: ${{ secrets.GCP_GRAPH_NETWORK }}
-          cluster_name: staging-network
-          location: us-central1-a
-          project_id: graph-mainnet
-
-      - name: Restart staging statefulset
-        run: kubectl rollout restart sts/${{ env.APP }}
