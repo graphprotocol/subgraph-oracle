@@ -1,6 +1,6 @@
 [package]
 name = "availability-oracle"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["Leonardo Yvens <leoyvens@gmail.com>"]
 edition = "2018"
 
