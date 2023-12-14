@@ -3,7 +3,7 @@ name: Build Availability Oracle
 on:
   push:
     branches:
-      - master
+      - main
 
 env:
   BASE_IMAGE: ghcr.io/edgeandnode/availability-oracle
