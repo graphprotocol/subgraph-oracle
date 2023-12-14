@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  BASE_IMAGE: ghcr.io/edgeandnode/availability-oracle
+  BASE_IMAGE: ghcr.io/graphprotocol/availability-oracle
   DOCKERFILE: Dockerfile.availability-oracle
   APP: availability-oracle
 
