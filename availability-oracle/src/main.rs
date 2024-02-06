@@ -12,6 +12,7 @@ use contract::*;
 use ipfs::*;
 use manifest::{Abi, DataSource, Manifest, Mapping};
 use network_subgraph::*;
+use secp256k1::key::SecretKey;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{fmt::Display, str::FromStr};
@@ -19,7 +20,6 @@ use structopt::StructOpt;
 use tiny_cid::Cid;
 use tokio::time::MissedTickBehavior;
 use util::bytes32_to_cid_v0;
-use secp256k1::key::SecretKey;
 
 fn parse_secs(secs: &str) -> Result<Duration, Error> {
     Ok(Duration::from_secs(u64::from_str(secs)?))
