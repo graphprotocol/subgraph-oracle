@@ -7,10 +7,12 @@ mod util;
 
 use common::prelude::*;
 use common::prometheus;
+use common::web3::signing::Key;
 use contract::*;
 use ipfs::*;
 use manifest::{Abi, DataSource, Manifest, Mapping};
 use network_subgraph::*;
+use secp256k1::key::SecretKey;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{fmt::Display, str::FromStr};
@@ -95,15 +97,6 @@ struct Config {
     contracts: Option<common::contracts::ContractConfig>,
 
     #[structopt(
-        short,
-        long,
-        env = "ORACLE_ADDRESS",
-        required_unless("dry-run"),
-        help = "The address used by by the oracle to sign transactions"
-    )]
-    oracle: Option<Address>,
-
-    #[structopt(
         long,
         env = "ORACLE_SIGNING_KEY",
         required_unless("dry-run"),
@@ -151,10 +144,10 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
     let subgraph = NetworkSubgraphImpl::new(logger.clone(), config.subgraph);
     let contract: Box<dyn RewardsManager> = match config.dry_run {
         false => {
-            let signing_key = &config.signing_key.unwrap().parse()?;
+            let signing_key: &SecretKey = &config.signing_key.unwrap().parse()?;
             let contracts_config = config.contracts.unwrap();
             let web3_context =
-                Web3Context::new(&contracts_config.url, config.oracle.unwrap(), signing_key)?;
+                Web3Context::new(&contracts_config.url, signing_key.address(), signing_key)?;
             let contracts = Contracts::new(contracts_config, web3_context);
             Box::new(RewardsManagerContract::new(contracts))
         }

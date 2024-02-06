@@ -3,7 +3,7 @@ The Subgraph Oracle verifies the availability of the subgraph files and does oth
 
 ```
 USAGE:
-    availability-oracle [FLAGS] [OPTIONS] --contracts <contracts> --ipfs <ipfs> --oracle <oracle> --signing-key <signing-key> --subgraph <subgraph>
+    availability-oracle [FLAGS] [OPTIONS] --contracts <contracts> --ipfs <ipfs> --signing-key <signing-key> --subgraph <subgraph>
 
 FLAGS:
         --dry-run    log the results but not send a transaction to the rewards manager
@@ -29,9 +29,6 @@ OPTIONS:
         --metrics-port <metrics-port>                    [env: ORACLE_METRICS_PORT=]  [default: 8090]
         --min-signal <min-signal>
             Minimum signal for a subgraph to be checked [env: ORACLE_MIN_SIGNAL=]  [default: 100]
-
-    -o, --oracle <oracle>
-            The address used by by the oracle to sign transactions [env: ORACLE_ADDRESS=]
 
         --period <period>
             How often the oracle should check the subgraphs. With the default value of 0, the oracle will run once and
