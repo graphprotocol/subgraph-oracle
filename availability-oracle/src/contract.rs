@@ -30,7 +30,7 @@ impl RewardsManagerContract {
     pub async fn new(
         signing_key: &SecretKey,
         url: Url,
-        rewards_manager_contract: String,
+        rewards_manager_contract: Address,
         logger: Logger,
     ) -> Self {
         let http_client = reqwest::ClientBuilder::new()
@@ -44,8 +44,7 @@ impl RewardsManagerContract {
             .unwrap()
             .with_chain_id(chain_id);
         let provider = Arc::new(SignerMiddleware::new(provider, wallet));
-        let address: Address = rewards_manager_contract.parse().unwrap();
-        let contract = RewardsManagerABI::new(address, provider.clone());
+        let contract = RewardsManagerABI::new(rewards_manager_contract, provider.clone());
         Self { contract, logger }
     }
 }

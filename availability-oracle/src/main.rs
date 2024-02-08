@@ -8,6 +8,7 @@ mod util;
 use common::prelude::*;
 use common::prometheus;
 use contract::*;
+use ethers::abi::Address;
 use ipfs::*;
 use manifest::{Abi, DataSource, Manifest, Mapping};
 use network_subgraph::*;
@@ -126,7 +127,7 @@ struct Config {
         env = "REWARDS_MANAGER_CONTRACT",
         help = "The address of the rewards manager contract"
     )]
-    pub rewards_manager_contract: String,
+    pub rewards_manager_contract: Address,
 
     #[structopt(long, env = "RPC_URL", help = "RPC url for the network")]
     pub url: Url,
