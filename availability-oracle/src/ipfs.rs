@@ -82,7 +82,7 @@ impl Ipfs for IpfsImpl {
     async fn cat(&self, cid: Cid) -> Result<Bytes, IpfsError> {
         if self.cache.contains_key(&cid) {
             METRICS.ipfs_cache_hits.inc();
-            let cached_bytes = self.cache.get(&cid).unwrap();
+            let cached_bytes = self.cache.get(&cid).await.unwrap();
             return Result::Ok(cached_bytes);
         }
 
