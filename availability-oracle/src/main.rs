@@ -18,8 +18,8 @@ use std::{fmt::Display, str::FromStr};
 use structopt::StructOpt;
 use tiny_cid::Cid;
 use tokio::time::MissedTickBehavior;
-use util::bytes32_to_cid_v0;
 use url::Url;
+use util::bytes32_to_cid_v0;
 
 fn parse_secs(secs: &str) -> Result<Duration, Error> {
     Ok(Duration::from_secs(u64::from_str(secs)?))
@@ -127,12 +127,8 @@ struct Config {
         help = "The address of the rewards manager contract"
     )]
     pub rewards_manager_contract: String,
-    
-    #[structopt(
-        long,
-        env = "RPC_URL",
-        help = "RPC url for the network"
-    )]
+
+    #[structopt(long, env = "RPC_URL", help = "RPC url for the network")]
     pub url: Url,
 }
 
@@ -147,12 +143,15 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
     let contract: Box<dyn RewardsManager> = match config.dry_run {
         false => {
             let signing_key: &SecretKey = &config.signing_key.unwrap().parse()?;
-            Box::new(RewardsManagerContract::new(
-                signing_key,
-                config.url,
-                config.rewards_manager_contract,
-                logger.clone(),
-            ).await)
+            Box::new(
+                RewardsManagerContract::new(
+                    signing_key,
+                    config.url,
+                    config.rewards_manager_contract,
+                    logger.clone(),
+                )
+                .await,
+            )
         }
         true => Box::new(RewardsManagerDryRun::new(logger.clone())),
     };

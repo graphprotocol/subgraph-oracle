@@ -1,17 +1,17 @@
 use async_trait::async_trait;
 use common::prelude::*;
 use common::prometheus;
-use secp256k1::key::SecretKey;
-use std::sync::Arc;
-use std::time::{Duration};
-use url::Url;
-use ethers:: {
+use ethers::{
     abi::Address,
     contract::abigen,
     middleware::SignerMiddleware,
     providers::{Http, Middleware, Provider},
     signers::{LocalWallet, Signer},
 };
+use secp256k1::key::SecretKey;
+use std::sync::Arc;
+use std::time::Duration;
+use url::Url;
 
 #[async_trait]
 pub trait RewardsManager {
@@ -28,10 +28,10 @@ pub struct RewardsManagerContract {
 
 impl RewardsManagerContract {
     pub async fn new(
-        signing_key: &SecretKey, 
-        url: Url, 
-        rewards_manager_contract: String, 
-        logger: Logger
+        signing_key: &SecretKey,
+        url: Url,
+        rewards_manager_contract: String,
+        logger: Logger,
     ) -> Self {
         let http_client = reqwest::ClientBuilder::new()
             .tcp_nodelay(true)
@@ -40,11 +40,12 @@ impl RewardsManagerContract {
             .unwrap();
         let provider = Provider::new(Http::new_with_client(url, http_client));
         let chain_id = provider.get_chainid().await.unwrap().as_u64();
-        let wallet =
-            LocalWallet::from_bytes(signing_key.as_ref()).unwrap().with_chain_id(chain_id);
+        let wallet = LocalWallet::from_bytes(signing_key.as_ref())
+            .unwrap()
+            .with_chain_id(chain_id);
         let provider = Arc::new(SignerMiddleware::new(provider, wallet));
         let address: Address = rewards_manager_contract.parse().unwrap();
-        let contract = RewardsManagerABI::new(address, provider.clone(),);
+        let contract = RewardsManagerABI::new(address, provider.clone());
         Self { contract, logger }
     }
 }
@@ -64,14 +65,15 @@ impl RewardsManager for RewardsManagerContract {
             let ids: Vec<[u8; 32usize]> = chunk.iter().map(|s| s.0).collect();
             let statuses: Vec<bool> = chunk.iter().map(|s| s.1).collect();
             let num_subgraphs = ids.len() as u64;
-            let tx = self.contract
+            let tx = self
+                .contract
                 .set_denied_many(ids, statuses)
                 // To avoid gas estimation errors, we use a high enough gas limit for 100 items
                 .gas(ethers::core::types::U256::from(3_000_000u64));
-            
+
             if let Err(err) = tx.call().await {
-                let message = err.decode_revert::<String>().unwrap();   
-                error!(self.logger, "Transaction failed"; 
+                let message = err.decode_revert::<String>().unwrap();
+                error!(self.logger, "Transaction failed";
                     "message" => message,
                 );
             } else {
