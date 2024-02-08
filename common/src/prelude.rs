@@ -18,7 +18,6 @@ macro_rules! concat_bytes {
 
 pub use crate::concat_bytes;
 
-pub use crate::contracts::Contracts;
 pub use crate::metrics::{Metrics, WithErrMetric as _};
 pub use anyhow::{anyhow, ensure, Context as _, Error, Result};
 pub use futures::{
@@ -28,10 +27,8 @@ pub use never::Never;
 pub use prometheus::Counter;
 pub use slog::{error, info, trace, warn, Logger};
 pub use std::convert::{TryFrom, TryInto};
-pub use web3::types::Address;
 pub type Bytes32 = [u8; 32];
 pub use lazy_static::lazy_static;
-pub use solidity_bindgen::{self, CallProvider, SendProvider, Web3Context, Web3Provider};
 
 pub use crate::impl_slog_value;
 pub use async_trait::async_trait;

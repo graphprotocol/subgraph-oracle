@@ -7,7 +7,6 @@ mod util;
 
 use common::prelude::*;
 use common::prometheus;
-use common::web3::signing::Key;
 use contract::*;
 use ipfs::*;
 use manifest::{Abi, DataSource, Manifest, Mapping};
@@ -20,6 +19,7 @@ use structopt::StructOpt;
 use tiny_cid::Cid;
 use tokio::time::MissedTickBehavior;
 use util::bytes32_to_cid_v0;
+use url::Url;
 
 fn parse_secs(secs: &str) -> Result<Duration, Error> {
     Ok(Duration::from_secs(u64::from_str(secs)?))
@@ -85,18 +85,6 @@ struct Config {
     ipfs_timeout: Duration,
 
     #[structopt(
-        short,
-        long,
-        env = "ORACLE_CONTRACTS",
-        required_unless("dry-run"),
-        help = "One of: `mainnet`, `goerli`, `arbitrum-one`, `arbitrum-goerli`, `ganache/mainnet` \
-            `sepolia` or `arbitrum-sepolia`. \
-            See `common/src/contracts/config.rs` for the respective \
-            configurations"
-    )]
-    contracts: Option<common::contracts::ContractConfig>,
-
-    #[structopt(
         long,
         env = "ORACLE_SIGNING_KEY",
         required_unless("dry-run"),
@@ -132,6 +120,20 @@ struct Config {
         help = "a comma separated list of the supported data source kinds"
     )]
     supported_data_source_kinds: Vec<String>,
+
+    #[structopt(
+        long,
+        env = "REWARDS_MANAGER_CONTRACT",
+        help = "The address of the rewards manager contract"
+    )]
+    pub rewards_manager_contract: String,
+    
+    #[structopt(
+        long,
+        env = "RPC_URL",
+        help = "RPC url for the network"
+    )]
+    pub url: Url,
 }
 
 #[tokio::main]
@@ -145,11 +147,12 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
     let contract: Box<dyn RewardsManager> = match config.dry_run {
         false => {
             let signing_key: &SecretKey = &config.signing_key.unwrap().parse()?;
-            let contracts_config = config.contracts.unwrap();
-            let web3_context =
-                Web3Context::new(&contracts_config.url, signing_key.address(), signing_key)?;
-            let contracts = Contracts::new(contracts_config, web3_context);
-            Box::new(RewardsManagerContract::new(contracts))
+            Box::new(RewardsManagerContract::new(
+                signing_key,
+                config.url,
+                config.rewards_manager_contract,
+                logger.clone(),
+            ).await)
         }
         true => Box::new(RewardsManagerDryRun::new(logger.clone())),
     };

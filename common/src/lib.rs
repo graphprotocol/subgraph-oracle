@@ -1,12 +1,9 @@
 pub mod async_cache;
-pub mod chain_id;
-pub mod contracts;
 pub mod logging;
 pub mod metrics;
 pub mod prelude;
 
 pub use prometheus;
-pub use web3;
 
 use prelude::*;
 use std::future::Future;
