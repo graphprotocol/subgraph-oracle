@@ -124,13 +124,20 @@ struct Config {
 
     #[structopt(
         long,
-        env = "REWARDS_MANAGER_CONTRACT",
+        env = "SUBGRAPH_AVAILABILITY_MANAGER_CONTRACT",
         help = "The address of the rewards manager contract"
     )]
-    pub rewards_manager_contract: Address,
+    pub subgraph_availability_manager_contract: Address,
 
     #[structopt(long, env = "RPC_URL", help = "RPC url for the network")]
     pub url: Url,
+
+    #[structopt(
+        long,
+        env = "ORACLE_INDEX",
+        help = "Assigned index for the oracle, to be used when voting on SubgraphAvailabilityManager"
+    )]
+    pub oracle_index: u64,
 }
 
 #[tokio::main]
@@ -148,7 +155,8 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
                 RewardsManagerContract::new(
                     signing_key,
                     config.url,
-                    config.rewards_manager_contract,
+                    config.subgraph_availability_manager_contract,
+                    config.oracle_index,
                     logger.clone(),
                 )
                 .await,
@@ -289,7 +297,7 @@ pub async fn reconcile_deny_list(
         .try_collect()
         .await?;
 
-    rewards_manager.set_denied_many(status_changes).await
+    rewards_manager.vote_denied_many(status_changes).await
 }
 
 enum Valid {

@@ -4,6 +4,7 @@ use common::prometheus;
 use ethers::{
     abi::Address,
     contract::abigen,
+    core::types::U256,
     middleware::SignerMiddleware,
     providers::{Http, Middleware, Provider},
     signers::{LocalWallet, Signer},
@@ -16,13 +17,17 @@ use url::Url;
 #[async_trait]
 pub trait RewardsManager {
     /// Send a transaction to the contract setting the denied status by deployment id.
-    async fn set_denied_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error>;
+    async fn vote_denied_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error>;
 }
 
-abigen!(RewardsManagerABI, "src/abi/RewardsManager.abi.json");
+abigen!(
+    SubgraphAvailabilityManagerABI,
+    "src/abi/SubgraphAvailabilityManager.abi.json"
+);
 
 pub struct RewardsManagerContract {
-    contract: RewardsManagerABI<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    contract: SubgraphAvailabilityManagerABI<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    oracle_index: u64,
     logger: Logger,
 }
 
@@ -30,7 +35,8 @@ impl RewardsManagerContract {
     pub async fn new(
         signing_key: &SecretKey,
         url: Url,
-        rewards_manager_contract: Address,
+        subgraph_availability_manager_contract: Address,
+        oracle_index: u64,
         logger: Logger,
     ) -> Self {
         let http_client = reqwest::ClientBuilder::new()
@@ -44,14 +50,21 @@ impl RewardsManagerContract {
             .unwrap()
             .with_chain_id(chain_id);
         let provider = Arc::new(SignerMiddleware::new(provider, wallet));
-        let contract = RewardsManagerABI::new(rewards_manager_contract, provider.clone());
-        Self { contract, logger }
+        let contract = SubgraphAvailabilityManagerABI::new(
+            subgraph_availability_manager_contract,
+            provider.clone(),
+        );
+        Self {
+            contract,
+            oracle_index,
+            logger,
+        }
     }
 }
 
 #[async_trait]
 impl RewardsManager for RewardsManagerContract {
-    async fn set_denied_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error> {
+    async fn vote_denied_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error> {
         // Based on this gas profile data for `setDeniedMany`:
         // gas-used,items
         // 4517721,200
@@ -64,11 +77,12 @@ impl RewardsManager for RewardsManagerContract {
             let ids: Vec<[u8; 32usize]> = chunk.iter().map(|s| s.0).collect();
             let statuses: Vec<bool> = chunk.iter().map(|s| s.1).collect();
             let num_subgraphs = ids.len() as u64;
+            let oracle_index = U256::from(self.oracle_index);
             let tx = self
                 .contract
-                .set_denied_many(ids, statuses)
+                .vote_many(ids, statuses, oracle_index)
                 // To avoid gas estimation errors, we use a high enough gas limit for 100 items
-                .gas(ethers::core::types::U256::from(3_000_000u64));
+                .gas(U256::from(3_000_000u64));
 
             if let Err(err) = tx.call().await {
                 let message = err.decode_revert::<String>().unwrap();
@@ -97,7 +111,7 @@ impl RewardsManagerDryRun {
 
 #[async_trait]
 impl RewardsManager for RewardsManagerDryRun {
-    async fn set_denied_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error> {
+    async fn vote_denied_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error> {
         for (id, deny_status) in denied_status {
             info!(self.logger, "Change deny status";
                             "id" => hex::encode(id),

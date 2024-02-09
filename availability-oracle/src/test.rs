@@ -134,7 +134,7 @@ struct MockRewardsManager;
 
 #[async_trait]
 impl contract::RewardsManager for MockRewardsManager {
-    async fn set_denied_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error> {
+    async fn vote_denied_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error> {
         let denied_status = denied_status
             .into_iter()
             .map(|(id, deny)| {
