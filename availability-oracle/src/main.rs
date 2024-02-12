@@ -4,6 +4,7 @@ mod manifest;
 mod network_subgraph;
 mod test;
 mod util;
+mod epoch_block_oracle_subgraph;
 
 use common::prelude::*;
 use common::prometheus;
@@ -21,6 +22,7 @@ use tiny_cid::Cid;
 use tokio::time::MissedTickBehavior;
 use url::Url;
 use util::bytes32_to_cid_v0;
+use epoch_block_oracle_subgraph::{EpochBlockOracleSubgraph, EpochBlockOracleSubgraphImpl};
 
 fn parse_secs(secs: &str) -> Result<Duration, Error> {
     Ok(Duration::from_secs(u64::from_str(secs)?))
@@ -102,15 +104,22 @@ struct Config {
     #[structopt(long, env = "ORACLE_METRICS_PORT", default_value = "8090")]
     metrics_port: u16,
 
+    // #[structopt(
+    //     short,
+    //     long,
+    //     default_value = "mainnet",
+    //     value_delimiter = ",",
+    //     env = "SUPPORTED_NETWORKS",
+    //     help = "a comma separated list of the supported network ids"
+    // )]
+    // supported_networks: Vec<String>,
+
     #[structopt(
-        short,
         long,
-        default_value = "mainnet",
-        value_delimiter = ",",
-        env = "SUPPORTED_NETWORKS",
-        help = "a comma separated list of the supported network ids"
+        env = "EPOCH_BLOCK_ORACLE_SUBGRAPH",
+        help = "Graphql endpoint to the epoch block oracle subgraph"
     )]
-    supported_networks: Vec<String>,
+    epoch_block_oracle_subgraph: String,
 
     // Note: `ethereum/contract` is a valid alias for `ethereum`
     #[structopt(
@@ -148,6 +157,7 @@ async fn main() -> Result<()> {
 async fn run(logger: Logger, config: Config) -> Result<()> {
     let ipfs = IpfsImpl::new(config.ipfs, config.ipfs_concurrency, config.ipfs_timeout);
     let subgraph = NetworkSubgraphImpl::new(logger.clone(), config.subgraph);
+    let epoch_subgraph = EpochBlockOracleSubgraphImpl::new(logger.clone(), config.epoch_block_oracle_subgraph);
     let contract: Box<dyn RewardsManager> = match config.dry_run {
         false => {
             let signing_key: &SecretKey = &config.signing_key.unwrap().parse()?;
@@ -168,6 +178,21 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
 
     common::metrics::serve(logger.clone(), config.metrics_port);
 
+    // Fetch the supported networks
+    let mut supported_networks = Vec::new();
+    let networks_stream = epoch_subgraph.supported_networks();
+    futures::pin_mut!(networks_stream);
+    while let Some(network) = networks_stream.next().await {
+        match network {
+            Ok(network_id) => supported_networks.push(network_id),
+            Err(e) => error!(logger, "Failed to fetch supported networks"; "error" => format!("{:#}", e)),
+        }
+    }
+
+    info!(logger, "Supported networks";
+        "ids" => supported_networks.join(", ")
+    );
+
     // Either loop forever or run once and return.
     if config.period > Duration::from_secs(0) {
         let mut interval = tokio::time::interval(config.period);
@@ -186,7 +211,7 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
                 subgraph.clone(),
                 config.min_signal,
                 grace_period,
-                &config.supported_networks,
+                &supported_networks,
                 &config.supported_data_source_kinds,
             )
             .await
@@ -219,7 +244,7 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
         subgraph,
         config.min_signal,
         grace_period,
-        &config.supported_networks,
+        &supported_networks,
         &config.supported_data_source_kinds,
     )
     .await
