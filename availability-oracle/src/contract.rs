@@ -1,7 +1,17 @@
 use async_trait::async_trait;
 use common::prelude::*;
 use common::prometheus;
-use common::web3::contract::Options;
+use ethers::{
+    abi::Address,
+    contract::abigen,
+    middleware::SignerMiddleware,
+    providers::{Http, Middleware, Provider},
+    signers::{LocalWallet, Signer},
+};
+use secp256k1::key::SecretKey;
+use std::sync::Arc;
+use std::time::Duration;
+use url::Url;
 
 #[async_trait]
 pub trait RewardsManager {
@@ -9,15 +19,33 @@ pub trait RewardsManager {
     async fn set_denied_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error>;
 }
 
-type Contracts = common::contracts::Contracts<solidity_bindgen::Web3Context, Web3Provider>;
+abigen!(RewardsManagerABI, "src/abi/RewardsManager.abi.json");
 
 pub struct RewardsManagerContract {
-    contracts: Contracts,
+    contract: RewardsManagerABI<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    logger: Logger,
 }
 
 impl RewardsManagerContract {
-    pub fn new(contracts: Contracts) -> Self {
-        Self { contracts }
+    pub async fn new(
+        signing_key: &SecretKey,
+        url: Url,
+        rewards_manager_contract: Address,
+        logger: Logger,
+    ) -> Self {
+        let http_client = reqwest::ClientBuilder::new()
+            .tcp_nodelay(true)
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap();
+        let provider = Provider::new(Http::new_with_client(url, http_client));
+        let chain_id = provider.get_chainid().await.unwrap().as_u64();
+        let wallet = LocalWallet::from_bytes(signing_key.as_ref())
+            .unwrap()
+            .with_chain_id(chain_id);
+        let provider = Arc::new(SignerMiddleware::new(provider, wallet));
+        let contract = RewardsManagerABI::new(rewards_manager_contract, provider.clone());
+        Self { contract, logger }
     }
 }
 
@@ -36,14 +64,21 @@ impl RewardsManager for RewardsManagerContract {
             let ids: Vec<[u8; 32usize]> = chunk.iter().map(|s| s.0).collect();
             let statuses: Vec<bool> = chunk.iter().map(|s| s.1).collect();
             let num_subgraphs = ids.len() as u64;
-            // To avoid gas estimation errors, we use a high enough gas limit for 100 items
-            let options = Options::with(|opt| opt.gas = Some(3_000_000.into()));
-            self.contracts
-                .rewards_manager()
-                .send("setDeniedMany", (ids, statuses), Some(options), Some(4))
-                .await?;
+            let tx = self
+                .contract
+                .set_denied_many(ids, statuses)
+                // To avoid gas estimation errors, we use a high enough gas limit for 100 items
+                .gas(ethers::core::types::U256::from(3_000_000u64));
 
-            METRICS.denied_subgraphs_total.inc_by(num_subgraphs);
+            if let Err(err) = tx.call().await {
+                let message = err.decode_revert::<String>().unwrap();
+                error!(self.logger, "Transaction failed";
+                    "message" => message,
+                );
+            } else {
+                tx.send().await?.await?;
+                METRICS.denied_subgraphs_total.inc_by(num_subgraphs);
+            }
         }
 
         Ok(())

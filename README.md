@@ -3,7 +3,8 @@ The Subgraph Oracle verifies the availability of the subgraph files and does oth
 
 ```
 USAGE:
-    availability-oracle [FLAGS] [OPTIONS] --contracts <contracts> --ipfs <ipfs> --signing-key <signing-key> --subgraph <subgraph>
+    availability-oracle [FLAGS] [OPTIONS] --rewards-manager-contract <rewards-manager-contract> \
+        --url <url> --ipfs <ipfs> --signing-key <signing-key> --subgraph <subgraph>
 
 FLAGS:
         --dry-run    log the results but not send a transaction to the rewards manager
@@ -11,9 +12,10 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -c, --contracts <contracts>
-            One of: `mainnet`, `goerli`, `arbitrum-one`, `arbitrum-goerli`, `ganache/mainnet`, `sepolia` or `arbitrum-sepolia`. See
-            `common/src/contracts/config.rs` for the respective configurations [env: ORACLE_CONTRACTS=]
+        --rewards-manager-contract <rewards-manager-contract>
+            Address of the Graph Protocol RewardsManager contract [env: REWARDS_MANAGER_CONTRACT=]
+        --url <url>
+            RPC URL for EVM-compatible netwrok, must be a valid URL [env: RPC_URL=]
         --grace-period <grace-period>
             Grace period, in seconds from subgraph creation, for which subgraphs will not be checked [env:
             ORACLE_GRACE_PERIOD=]  [default: 0]

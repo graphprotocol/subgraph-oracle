@@ -9,16 +9,13 @@ publish = false
 [dependencies]
 anyhow = "1.0.31"
 async-trait = "0.1.50"
-eip-712-derive = { git = "https://github.com/graphprotocol/eip-712-derive" }
 slog = { version = "2.5.2", features = ["release_max_level_trace", "max_level_trace"] }
 slog-term = "2.6.0"
 slog-async = "2.5.0"
 futures = { version="0.3.5", features=["compat"] }
 warp = "0.3.1"
 prometheus = "0.12.0"
-tokio = { version="1.10", features=["sync", "time"] }
-web3 = "0.16.0"
-solidity-bindgen = "0.1.0"
+tokio = { version="1.10", features=["sync", "time", "rt-multi-thread"] }
 structopt = "0.3.14"
 never = "0.1.0"
 secp256k1 = "0.20.3"
