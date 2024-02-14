@@ -12,7 +12,7 @@ use ethers::abi::Address;
 use ipfs::*;
 use manifest::{Abi, DataSource, Manifest, Mapping};
 use network_subgraph::*;
-use secp256k1::key::SecretKey;
+use secp256k1::SecretKey;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{fmt::Display, str::FromStr};

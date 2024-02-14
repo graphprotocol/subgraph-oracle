@@ -8,7 +8,7 @@ use ethers::{
     providers::{Http, Middleware, Provider},
     signers::{LocalWallet, Signer},
 };
-use secp256k1::key::SecretKey;
+use secp256k1::SecretKey;
 use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
