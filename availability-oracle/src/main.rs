@@ -124,13 +124,27 @@ struct Config {
 
     #[structopt(
         long,
+        env = "SUBGRAPH_AVAILABILITY_MANAGER_CONTRACT",
+        help = "The address of the subgraph availability manager contract"
+    )]
+    pub subgraph_availability_manager_contract: Option<Address>,
+
+    #[structopt(
+        long,
         env = "REWARDS_MANAGER_CONTRACT",
         help = "The address of the rewards manager contract"
     )]
-    pub rewards_manager_contract: Address,
+    pub rewards_manager_contract: Option<Address>,
 
     #[structopt(long, env = "RPC_URL", help = "RPC url for the network")]
     pub url: Url,
+
+    #[structopt(
+        long,
+        env = "ORACLE_INDEX",
+        help = "Assigned index for the oracle, to be used when voting on SubgraphAvailabilityManager"
+    )]
+    pub oracle_index: Option<u64>,
 }
 
 #[tokio::main]
@@ -141,20 +155,18 @@ async fn main() -> Result<()> {
 async fn run(logger: Logger, config: Config) -> Result<()> {
     let ipfs = IpfsImpl::new(config.ipfs, config.ipfs_concurrency, config.ipfs_timeout);
     let subgraph = NetworkSubgraphImpl::new(logger.clone(), config.subgraph);
-    let contract: Box<dyn RewardsManager> = match config.dry_run {
-        false => {
-            let signing_key: &SecretKey = &config.signing_key.unwrap().parse()?;
-            Box::new(
-                RewardsManagerContract::new(
-                    signing_key,
-                    config.url,
-                    config.rewards_manager_contract,
-                    logger.clone(),
-                )
-                .await,
-            )
-        }
-        true => Box::new(RewardsManagerDryRun::new(logger.clone())),
+    let contract: Box<dyn StateManager> = if config.dry_run {
+        Box::new(StateManagerDryRun::new(logger.clone()))
+    } else {
+        let signing_key: &SecretKey = &config.signing_key.unwrap().parse()?;
+        state_manager(
+            config.url,
+            signing_key,
+            config.rewards_manager_contract,
+            config.subgraph_availability_manager_contract,
+            config.oracle_index,
+            logger.clone()
+        ).await.expect("Configuration error: either [`REWARDS_MANAGER_CONTRACT`] or [`SUBGRAPH_AVAILABILITY_MANAGER_CONTRACT` and `ORACLE_INDEX`] must be provided.")
     };
     let grace_period = Duration::from_secs(config.grace_period);
 
@@ -217,6 +229,40 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
     .await
 }
 
+// This function is used to create a state manager based on the configuration.
+// If subgraph_availability_manager_contract and oracle_index are provided, it will create a SubgraphAvailabilityManagerContract.
+// If rewards_manager_contract is provided, it will create a RewardsManagerContract.
+// If none of the above are provided, it will return None.
+async fn state_manager(
+    rpc_url: Url,
+    signing_key: &SecretKey,
+    rewards_manager_contract: Option<Address>,
+    subgraph_availability_manager_contract: Option<Address>,
+    oracle_index: Option<u64>,
+    logger: Logger,
+) -> Option<Box<dyn StateManager>> {
+    if let Some(contract_address) = subgraph_availability_manager_contract {
+        if let Some(oracle_index) = oracle_index {
+            let contract = SubgraphAvailabilityManagerContract::new(
+                signing_key,
+                rpc_url,
+                contract_address,
+                oracle_index,
+                logger.clone(),
+            )
+            .await;
+            return Some(Box::new(contract));
+        }
+    } else if let Some(contract_address) = rewards_manager_contract {
+        let contract =
+            RewardsManagerContract::new(signing_key, rpc_url, contract_address, logger.clone())
+                .await;
+        return Some(Box::new(contract));
+    }
+
+    None
+}
+
 /// Does the thing that the availablitiy oracle does, namely:
 /// 1. Grab the list of all deployments over the curation threshold from the subgraph.
 /// 2. Check if their availability status changed.
@@ -224,7 +270,7 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
 pub async fn reconcile_deny_list(
     logger: &Logger,
     ipfs: &impl Ipfs,
-    rewards_manager: &dyn contract::RewardsManager,
+    state_manager: &dyn contract::StateManager,
     subgraph: Arc<impl NetworkSubgraph>,
     min_signal: u64,
     grace_period: Duration,
@@ -289,7 +335,7 @@ pub async fn reconcile_deny_list(
         .try_collect()
         .await?;
 
-    rewards_manager.set_denied_many(status_changes).await
+    state_manager.deny_many(status_changes).await
 }
 
 enum Valid {
