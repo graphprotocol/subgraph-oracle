@@ -47,7 +47,7 @@ async fn test_reconcile() {
     crate::reconcile_deny_list(
         &common::logging::create_logger(),
         &MockIpfs,
-        &MockRewardsManager,
+        &MockStateManager,
         Arc::new(MockSubgraph),
         0,
         Duration::default(),
@@ -130,11 +130,11 @@ impl Ipfs for MockIpfs {
     }
 }
 
-struct MockRewardsManager;
+struct MockStateManager;
 
 #[async_trait]
-impl contract::RewardsManager for MockRewardsManager {
-    async fn set_denied_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error> {
+impl contract::StateManager for MockStateManager {
+    async fn deny_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error> {
         let denied_status = denied_status
             .into_iter()
             .map(|(id, deny)| {
