@@ -9,6 +9,8 @@ use common::prelude::*;
 use common::prometheus;
 use contract::*;
 use ethers::abi::Address;
+use ethers::signers::LocalWallet;
+use ethers::signers::Signer;
 use ipfs::*;
 use manifest::{Abi, DataSource, Manifest, Mapping};
 use network_subgraph::*;
@@ -159,6 +161,8 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
         Box::new(StateManagerDryRun::new(logger.clone()))
     } else {
         let signing_key: &SecretKey = &config.signing_key.unwrap().parse()?;
+        let wallet = LocalWallet::from_bytes(signing_key.as_ref()).unwrap();
+        info!(logger, "Signing account {}", wallet.address().to_string());
         state_manager(
             config.url,
             signing_key,
