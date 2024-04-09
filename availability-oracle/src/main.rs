@@ -117,7 +117,7 @@ struct Config {
     // Note: `ethereum/contract` is a valid alias for `ethereum`
     #[structopt(
         long,
-        default_value = "ethereum,ethereum/contract,file/ipfs,substreams",
+        default_value = "ethereum,ethereum/contract,file/ipfs,substreams,file/arweave",
         value_delimiter = ",",
         env = "SUPPORTED_DATA_SOURCE_KINDS",
         help = "a comma separated list of the supported data source kinds"
