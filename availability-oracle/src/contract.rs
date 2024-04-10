@@ -99,9 +99,7 @@ impl StateManager for RewardsManagerContract {
             let ids: Vec<[u8; 32usize]> = chunk.iter().map(|s| s.0).collect();
             let statuses: Vec<bool> = chunk.iter().map(|s| s.1).collect();
             let num_subgraphs = ids.len() as u64;
-            let tx = self
-                .contract
-                .set_denied_many(ids, statuses);
+            let tx = self.contract.set_denied_many(ids, statuses);
 
             if let Err(err) = tx.call().await {
                 let message = err.decode_revert::<String>().unwrap_or(err.to_string());
@@ -127,9 +125,7 @@ impl StateManager for SubgraphAvailabilityManagerContract {
             let statuses: Vec<bool> = chunk.iter().map(|s| s.1).collect();
             let num_subgraphs = ids.len() as u64;
             let oracle_index = U256::from(self.oracle_index);
-            let tx = self
-                .contract
-                .vote_many(ids, statuses, oracle_index);
+            let tx = self.contract.vote_many(ids, statuses, oracle_index);
 
             if let Err(err) = tx.call().await {
                 let message = err.decode_revert::<String>().unwrap_or(err.to_string());
