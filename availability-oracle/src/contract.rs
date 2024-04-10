@@ -94,13 +94,6 @@ impl SubgraphAvailabilityManagerContract {
 #[async_trait]
 impl StateManager for RewardsManagerContract {
     async fn deny_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error> {
-        // Based on this gas profile data for `setDeniedMany`:
-        // gas-used,items
-        // 4517721,200
-        // 2271420,100
-        // 474431,20
-        // 47642,1
-        //
         // 100 is considered as a good chunk size.
         for chunk in denied_status.chunks(100) {
             let ids: Vec<[u8; 32usize]> = chunk.iter().map(|s| s.0).collect();
@@ -108,12 +101,10 @@ impl StateManager for RewardsManagerContract {
             let num_subgraphs = ids.len() as u64;
             let tx = self
                 .contract
-                .set_denied_many(ids, statuses)
-                // To avoid gas estimation errors, we use a high enough gas limit for 100 items
-                .gas(ethers::core::types::U256::from(3_000_000u64));
+                .set_denied_many(ids, statuses);
 
             if let Err(err) = tx.call().await {
-                let message = err.decode_revert::<String>().unwrap();
+                let message = err.decode_revert::<String>().unwrap_or(err.to_string());
                 error!(self.logger, "Transaction failed";
                     "message" => message,
                 );
@@ -130,13 +121,6 @@ impl StateManager for RewardsManagerContract {
 #[async_trait]
 impl StateManager for SubgraphAvailabilityManagerContract {
     async fn deny_many(&self, denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error> {
-        // Based on this gas profile data for `setDeniedMany`:
-        // gas-used,items
-        // 4517721,200
-        // 2271420,100
-        // 474431,20
-        // 47642,1
-        //
         // 100 is considered as a good chunk size.
         for chunk in denied_status.chunks(100) {
             let ids: Vec<[u8; 32usize]> = chunk.iter().map(|s| s.0).collect();
@@ -145,12 +129,10 @@ impl StateManager for SubgraphAvailabilityManagerContract {
             let oracle_index = U256::from(self.oracle_index);
             let tx = self
                 .contract
-                .vote_many(ids, statuses, oracle_index)
-                // To avoid gas estimation errors, we use a high enough gas limit for 100 items
-                .gas(U256::from(3_000_000u64));
+                .vote_many(ids, statuses, oracle_index);
 
             if let Err(err) = tx.call().await {
-                let message = err.decode_revert::<String>().unwrap();
+                let message = err.decode_revert::<String>().unwrap_or(err.to_string());
                 error!(self.logger, "Transaction failed";
                     "message" => message,
                 );
