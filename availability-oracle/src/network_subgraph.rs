@@ -66,7 +66,7 @@ struct GraphqlResponse {
 
 const DEPLOYMENTS_QUERY: &str = r#"
 query($threshold: BigInt!, $max_creation: Int!, $skip: Int!) {
-    subgraphDeployments(first: 1000, skip: $skip, where: { signalledTokens_gt: $threshold, createdAt_lt: $max_creation }) {
+    subgraphDeployments(first: 1000, skip: $skip, where: { id: "0x8ac6d590f88f1bd48f5f495b2a56f9a183f9b335d3d3a72807dbf2247c7ee558", signalledTokens_gt: $threshold, createdAt_lt: $max_creation }) {
         id
         stakedTokens
         deniedAt

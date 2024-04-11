@@ -102,9 +102,7 @@ impl StateManager for RewardsManagerContract {
             let tx = self.contract.set_denied_many(ids, statuses);
 
             // Calculate estimated gas
-            let estimated_gas_tx = tx
-                .estimate_gas()
-                .await;
+            let estimated_gas_tx = tx.estimate_gas().await;
 
             let estimated_gas = match estimated_gas_tx {
                 Ok(estimate) => estimate,
@@ -141,9 +139,7 @@ impl StateManager for SubgraphAvailabilityManagerContract {
             let tx = self.contract.vote_many(ids, statuses, oracle_index);
 
             // Calculate estimated gas
-            let estimated_gas_tx = tx
-                .estimate_gas()
-                .await;
+            let estimated_gas_tx = tx.estimate_gas().await;
 
             let estimated_gas = match estimated_gas_tx {
                 Ok(estimate) => estimate,
