@@ -101,15 +101,28 @@ impl StateManager for RewardsManagerContract {
             let num_subgraphs = ids.len() as u64;
             let tx = self.contract.set_denied_many(ids, statuses);
 
-            if let Err(err) = tx.call().await {
-                let message = err.decode_revert::<String>().unwrap_or(err.to_string());
-                error!(self.logger, "Transaction failed";
-                    "message" => message,
-                );
-            } else {
-                tx.send().await?.await?;
-                METRICS.denied_subgraphs_total.inc_by(num_subgraphs);
-            }
+            // Calculate estimated gas
+            let estimated_gas_tx = tx
+                .estimate_gas()
+                .await;
+
+            let estimated_gas = match estimated_gas_tx {
+                Ok(estimate) => estimate,
+                Err(err) => {
+                    let message = err.decode_revert::<String>().unwrap_or(err.to_string());
+                    error!(self.logger, "Transaction failed";
+                        "message" => message,
+                    );
+                    // Return `Ok()` to avoid double error logging
+                    return Ok(());
+                }
+            };
+
+            // Increase the estimated gas by 20%
+            let increased_estimate = estimated_gas * U256::from(120) / U256::from(100);
+
+            tx.gas(increased_estimate).send().await?.await?;
+            METRICS.denied_subgraphs_total.inc_by(num_subgraphs);
         }
 
         Ok(())
@@ -127,15 +140,28 @@ impl StateManager for SubgraphAvailabilityManagerContract {
             let oracle_index = U256::from(self.oracle_index);
             let tx = self.contract.vote_many(ids, statuses, oracle_index);
 
-            if let Err(err) = tx.call().await {
-                let message = err.decode_revert::<String>().unwrap_or(err.to_string());
-                error!(self.logger, "Transaction failed";
-                    "message" => message,
-                );
-            } else {
-                tx.send().await?.await?;
-                METRICS.denied_subgraphs_total.inc_by(num_subgraphs);
-            }
+            // Calculate estimated gas
+            let estimated_gas_tx = tx
+                .estimate_gas()
+                .await;
+
+            let estimated_gas = match estimated_gas_tx {
+                Ok(estimate) => estimate,
+                Err(err) => {
+                    let message = err.decode_revert::<String>().unwrap_or(err.to_string());
+                    error!(self.logger, "Transaction failed";
+                        "message" => message,
+                    );
+                    // Return `Ok()` to avoid double error logging
+                    return Ok(());
+                }
+            };
+
+            // Increase the estimated gas by 20%
+            let increased_estimate = estimated_gas * U256::from(120) / U256::from(100);
+
+            tx.gas(increased_estimate).send().await?.await?;
+            METRICS.denied_subgraphs_total.inc_by(num_subgraphs);
         }
 
         Ok(())
