@@ -97,7 +97,7 @@ impl Ipfs for IpfsImpl {
                     Ok(res) => return Ok(res),
                     Err(e) => {
                         last_err = Some(e);
-                    },
+                    }
                 }
             }
             Err(last_err.unwrap())
