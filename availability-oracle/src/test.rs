@@ -1,4 +1,5 @@
 use crate::contract;
+use crate::epoch_block_oracle_subgraph::*;
 use crate::ipfs::*;
 use crate::network_subgraph::*;
 use crate::util::bytes32_to_cid_v0;
@@ -51,7 +52,7 @@ async fn test_reconcile() {
         Arc::new(MockSubgraph),
         0,
         Duration::default(),
-        &vec!["mainnet".into()],
+        Arc::new(MockEBOSubgraph),
         &vec![
             "ethereum".into(),
             "ethereum/contract".into(),
@@ -92,6 +93,14 @@ impl NetworkSubgraph for MockSubgraph {
             new_subgraph(FILE_DS, false),
         ])
         .boxed()
+    }
+}
+
+struct MockEBOSubgraph;
+
+impl EpochBlockOracleSubgraph for MockEBOSubgraph {
+    fn supported_networks(self: Arc<Self>) -> Pin<Box<dyn Stream<Item = Result<String, Error>>>> {
+        futures::stream::iter(vec![Ok("mainnet".to_string())]).boxed()
     }
 }
 
