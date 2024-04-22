@@ -86,7 +86,24 @@ impl Ipfs for IpfsImpl {
             return Result::Ok(cached_bytes);
         }
 
-        let res = self.call("cat", cid).await;
+        async fn call_with_retry(
+            ipfs: &IpfsImpl,
+            cid: Cid,
+            retries: usize,
+        ) -> Result<reqwest::Response, IpfsError> {
+            let mut last_err = None;
+            for _ in 0..=retries {
+                match ipfs.call("cat", cid).await {
+                    Ok(res) => return Ok(res),
+                    Err(e) => {
+                        last_err = Some(e);
+                    }
+                }
+            }
+            Err(last_err.unwrap())
+        }
+
+        let res = call_with_retry(self, cid, 1).await;
         METRICS.ipfs_requests_total.inc();
         let final_bytes = res?.bytes().map_err(|e| IpfsError::Other(e.into())).await?;
 
