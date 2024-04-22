@@ -65,7 +65,7 @@ OPTIONS:
 ```
 cargo run -p availability-oracle -- \
     --ipfs https://api.thegraph.com/ipfs \
-    --subgraph https://gateway.thegraph.com/network \
+    --subgraph <network-subgraph-url> \
     --min-signal 10000 \
     --url <url> \
     --dry-run
@@ -76,7 +76,7 @@ cargo run -p availability-oracle -- \
 ```
 cargo run -p availability-oracle -- \
     --ipfs https://api.thegraph.com/ipfs \
-    --subgraph https://gateway.thegraph.com/network \
+    --subgraph <network-subgraph-url> \
     --min-signal 10000 \
     --url <url> \
     --subgraph-availability-manager-contract <address> \
@@ -89,7 +89,7 @@ cargo run -p availability-oracle -- \
 ```
 cargo run -p availability-oracle -- \
     --ipfs https://api.thegraph.com/ipfs \
-    --subgraph https://gateway.thegraph.com/network \
+    --subgraph <network-subgraph-url> \
     --min-signal 10000 \
     --url <url> \
     --rewards-manager-contract <address> \
