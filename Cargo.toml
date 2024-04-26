@@ -1,5 +1,5 @@
 [workspace]
 members = [
-    "common",
-    "availability-oracle",
+    "crates/*",
+    "availability-oracle"
 ]

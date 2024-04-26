@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "webpack-dev-server": "^5.0.4"
+  }
+}

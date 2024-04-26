@@ -1,0 +1,31 @@
+[
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "commitHash",
+          "type": "string"
+        },
+        {
+          "components": [
+            {"name": "ipfsConcurrency", "type": "string"},
+            {"name": "ipfsTimeout", "type": "string"},
+            {"name": "minSignal", "type": "string"},
+            {"name": "period", "type": "string"},
+            {"name": "gracePeriod", "type": "string"},
+            {"name": "supportedDataSourceKinds", "type": "string"},
+            {"name": "subgraph", "type": "string"},
+            {"name": "subgraphAvailabilityManagerContract", "type": "string"},
+            {"name": "oracleIndex", "type": "string"}
+          ],
+          "name": "config",
+          "type": "tuple"
+        }
+      ],
+      "name": "submitConfig",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+]
