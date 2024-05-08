@@ -356,7 +356,7 @@ impl Display for Valid {
     }
 }
 
-const FORBIDDEN_HOST_FN_PREFIX: &[&str; 2] = &["ipfs", "ens"];
+const FORBIDDEN_HOST_FN_PREFIX: &[&str; 1] = &["ipfs"];
 
 enum Invalid {
     BadCid(String),
