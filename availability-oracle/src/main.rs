@@ -1,4 +1,5 @@
 mod contract;
+mod epoch_block_oracle_subgraph;
 mod ipfs;
 mod manifest;
 mod network_subgraph;
@@ -8,6 +9,7 @@ mod util;
 use common::prelude::*;
 use common::prometheus;
 use contract::*;
+use epoch_block_oracle_subgraph::{EpochBlockOracleSubgraph, EpochBlockOracleSubgraphImpl};
 use ethers::abi::Address;
 use ethers::signers::LocalWallet;
 use ethers::signers::Signer;
@@ -105,14 +107,11 @@ struct Config {
     metrics_port: u16,
 
     #[structopt(
-        short,
         long,
-        default_value = "mainnet",
-        value_delimiter = ",",
-        env = "SUPPORTED_NETWORKS",
-        help = "a comma separated list of the supported network ids"
+        env = "EPOCH_BLOCK_ORACLE_SUBGRAPH",
+        help = "Graphql endpoint to the epoch block oracle subgraph"
     )]
-    supported_networks: Vec<String>,
+    epoch_block_oracle_subgraph: String,
 
     // Note: `ethereum/contract` is a valid alias for `ethereum`
     #[structopt(
@@ -157,6 +156,8 @@ async fn main() -> Result<()> {
 async fn run(logger: Logger, config: Config) -> Result<()> {
     let ipfs = IpfsImpl::new(config.ipfs, config.ipfs_concurrency, config.ipfs_timeout);
     let subgraph = NetworkSubgraphImpl::new(logger.clone(), config.subgraph);
+    let epoch_subgraph =
+        EpochBlockOracleSubgraphImpl::new(logger.clone(), config.epoch_block_oracle_subgraph);
     let contract: Box<dyn StateManager> = if config.dry_run {
         Box::new(StateManagerDryRun::new(logger.clone()))
     } else {
@@ -194,7 +195,7 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
                 subgraph.clone(),
                 config.min_signal,
                 grace_period,
-                &config.supported_networks,
+                epoch_subgraph.clone(),
                 &config.supported_data_source_kinds,
             )
             .await
@@ -227,7 +228,7 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
         subgraph,
         config.min_signal,
         grace_period,
-        &config.supported_networks,
+        epoch_subgraph.clone(),
         &config.supported_data_source_kinds,
     )
     .await
@@ -278,10 +279,25 @@ pub async fn reconcile_deny_list(
     subgraph: Arc<impl NetworkSubgraph>,
     min_signal: u64,
     grace_period: Duration,
-    supported_network_ids: &[String],
+    epoch_subgraph: Arc<impl EpochBlockOracleSubgraph>,
     supported_ds_kinds: &[String],
 ) -> Result<(), Error> {
     let logger = logger.clone();
+
+    // Fetch supported networks
+    let mut supported_networks = Vec::new();
+    let networks_stream = epoch_subgraph.supported_networks();
+    futures::pin_mut!(networks_stream);
+    while let Some(network) = networks_stream.next().await {
+        match network {
+            Ok(network_id) => supported_networks.push(network_id),
+            Err(e) => Err(e)?,
+        }
+    }
+
+    info!(logger, "Supported networks";
+        "alias" => supported_networks.join(", ")
+    );
 
     // Check the availability status of all subgraphs, and gather which should flip the deny flag.
     let status_changes: Vec<([u8; 32], bool)> = subgraph
@@ -289,7 +305,7 @@ pub async fn reconcile_deny_list(
         .map(|deployment| async {
             let deployment = deployment?;
             let id = bytes32_to_cid_v0(deployment.id);
-            let validity = match check(ipfs, id, supported_network_ids, supported_ds_kinds).await {
+            let validity = match check(ipfs, id, &supported_networks, supported_ds_kinds).await {
                 Ok(()) => Valid::Yes,
                 Err(CheckError::Invalid(e)) => Valid::No(e),
                 Err(CheckError::Other(e)) => return Err(e),
@@ -419,7 +435,7 @@ impl From<Invalid> for CheckError {
 async fn check(
     ipfs: &impl Ipfs,
     deployment_id: Cid,
-    supported_network_ids: &[String],
+    supported_networks: &[String],
     supported_ds_kinds: &[String],
 ) -> Result<(), CheckError> {
     fn check_link(file: &manifest::Link) -> Result<Cid, Invalid> {
@@ -483,7 +499,7 @@ async fn check(
         // - That network is listed in the `supported_networks` list
         match (network, ds_network) {
             (None, Some(ds_network)) => {
-                if !supported_network_ids.contains(ds_network) {
+                if !supported_networks.contains(ds_network) {
                     return Err(Invalid::UnsupportedNetwork(ds_network.clone()).into());
                 }
                 network = Some(ds_network)

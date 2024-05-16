@@ -11,6 +11,9 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
+        --epoch-block-oracle-subgraph <subgraph>
+            Graphql endpoint to the epoch block oracle subgraph used for fetching supported networks [env: EPOCH_BLOCK_ORACLE_SUBGRAPH=]
+
         --grace-period <grace-period>
             Grace period, in seconds from subgraph creation, for which subgraphs will not be checked [env: ORACLE_GRACE_PERIOD=]  [default: 0]
         
@@ -22,7 +25,7 @@ OPTIONS:
 
         --ipfs-timeout <ipfs-timeout>
             IPFS timeout after which a file will be considered unavailable [env: ORACLE_IPFS_TIMEOUT_SECS=]  [default: 30]
-        
+
         --metrics-port <metrics-port>
              [env: ORACLE_METRICS_PORT=]  [default: 8090]
 
@@ -49,9 +52,6 @@ OPTIONS:
 
         --supported-data-source-kinds <supported-data-source-kinds>...
             a comma separated list of the supported data source kinds [env: SUPPORTED_DATA_SOURCE_KINDS=]  [default: ethereum,ethereum/contract,file/ipfs,substreams,file/arweave]
-    
-    -s, --supported-networks <supported-networks>...
-            a comma separated list of the supported network ids [env: SUPPORTED_NETWORKS=]  [default: mainnet]
 
         --url <url>
             RPC url for the network [env: RPC_URL=]
