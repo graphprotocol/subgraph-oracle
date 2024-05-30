@@ -14,7 +14,8 @@
             {"name": "period", "type": "string"},
             {"name": "gracePeriod", "type": "string"},
             {"name": "supportedDataSourceKinds", "type": "string"},
-            {"name": "subgraph", "type": "string"},
+            {"name": "networkSubgraphId", "type": "string"},
+            {"name": "epochBlockOracleSubgraphId", "type": "string"},
             {"name": "subgraphAvailabilityManagerContract", "type": "string"},
             {"name": "oracleIndex", "type": "string"}
           ],
