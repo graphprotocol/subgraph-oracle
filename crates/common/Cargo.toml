@@ -7,16 +7,16 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.79"
-async-trait = "0.1.50"
+anyhow = "1.0.86"
+async-trait = "0.1.80"
 slog = { version = "2.5.2", features = ["release_max_level_trace", "max_level_trace"] }
-slog-term = "2.6.0"
+slog-term = "2.9.1"
 slog-async = "2.8.0"
 futures = { version="0.3.30", features=["compat"] }
 warp = "0.3.6"
 prometheus = "0.13.3"
-tokio = { version="1.10", features=["sync", "time", "rt-multi-thread"] }
+tokio = { version="1.37.0", features=["sync", "time", "rt-multi-thread"] }
 structopt = "0.3.14"
 never = "0.1.0"
 lazy_static = "1.4.0"
-blake3 = "1.5.0"
+blake3 = "1.5.1"
