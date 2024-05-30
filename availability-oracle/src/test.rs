@@ -101,7 +101,9 @@ mod tests {
     struct MockEBOSubgraph;
 
     impl EpochBlockOracleSubgraph for MockEBOSubgraph {
-        fn supported_networks(self: Arc<Self>) -> Pin<Box<dyn Stream<Item = Result<String, Error>>>> {
+        fn supported_networks(
+            self: Arc<Self>,
+        ) -> Pin<Box<dyn Stream<Item = Result<String, Error>>>> {
             futures::stream::iter(vec![Ok("mainnet".to_string())]).boxed()
         }
     }
@@ -165,5 +167,4 @@ mod tests {
             Ok(())
         }
     }
-    
 }

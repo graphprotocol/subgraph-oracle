@@ -14,6 +14,7 @@ pub fn bytes32_to_cid_v0(bytes32: [u8; 32]) -> Cid {
 }
 
 // Panics if `cid` version is not v0.
+#[allow(dead_code)]
 pub fn cid_v0_to_bytes32(cid: &Cid) -> [u8; 32] {
     assert!(cid.version() == tiny_cid::Version::V0);
     let cid_bytes = cid.to_bytes();
