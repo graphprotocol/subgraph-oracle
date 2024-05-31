@@ -452,10 +452,9 @@ async fn check(
         for payload in wasmparser::Parser::new(0).parse_all(mapping) {
             if let Payload::ImportSection(s) = payload? {
                 for import in s {
-                    if let Some(field) = import?.field {
-                        if host_fn_prefixes.iter().any(|p| field.starts_with(p)) {
-                            return Ok(Some(field));
-                        }
+                    let name = import?.name;
+                    if host_fn_prefixes.iter().any(|p| name.starts_with(p)) {
+                        return Ok(Some(name));
                     }
                 }
             }
