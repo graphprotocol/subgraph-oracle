@@ -85,7 +85,9 @@ impl EpochBlockOracleSubgraph for EpochBlockOracleSubgraphImpl {
                         .ok_or_else(|| anyhow!("Data field is missing in the response"))?
                         .remove("globalState")
                         .and_then(|global_state| global_state.get("networks").cloned())
-                        .ok_or_else(|| anyhow!("'networks' field is missing in the globalState data"))?;
+                        .ok_or_else(|| {
+                            anyhow!("'networks' field is missing in the globalState data")
+                        })?;
 
                     #[derive(Deserialize)]
                     #[allow(non_snake_case)]
