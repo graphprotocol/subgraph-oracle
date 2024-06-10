@@ -41,11 +41,13 @@ struct GraphqlResponse {
 
 const SUPPORTED_NETWORKS_QUERY: &str = r#"
 query Networks($skip: Int!) {
-    networks(first: 1000, skip: $skip) {
-      id
-      alias
+    globalState(id: "0") {
+        networks(first: 1000, skip: $skip) {
+            id
+            alias
+        }
     }
-  }
+}
 "#;
 
 impl EpochBlockOracleSubgraph for EpochBlockOracleSubgraphImpl {
@@ -81,8 +83,9 @@ impl EpochBlockOracleSubgraph for EpochBlockOracleSubgraphImpl {
                     let data = res
                         .data
                         .ok_or_else(|| anyhow!("Data field is missing in the response"))?
-                        .remove("networks")
-                        .ok_or_else(|| anyhow!("'networks' field is missing in the data"))?;
+                        .remove("globalState")
+                        .and_then(|global_state| global_state.get("networks").cloned())
+                        .ok_or_else(|| anyhow!("'networks' field is missing in the globalState data"))?;
 
                     #[derive(Deserialize)]
                     #[allow(non_snake_case)]
