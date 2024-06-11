@@ -1,13 +1,30 @@
-FROM rust:latest as build
+# Use an official Rust image to build the project
+FROM --platform=linux/amd64 rust:1.78 as build
 
-# Copy and build the project
+# Set the working directory
 WORKDIR /availability-oracle/src
-COPY . ./
+
+# Copy the source code into the container
+COPY . .
+
+# Build the project
 RUN cargo install --locked --path availability-oracle
 
-## Clean up the source directory
-RUN rm -rf /src
+# Use a minimal image for the final stage with a fixed version
+FROM --platform=linux/amd64 debian:12-slim
 
+# Install the necessary dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the built binary from the build stage
+COPY --from=build /usr/local/cargo/bin/availability-oracle /usr/local/bin/availability-oracle
+
+# Set the user
 USER 1000
-ENTRYPOINT ["/usr/local/cargo/bin/availability-oracle"]
+
+# Set the entrypoint and command
+ENTRYPOINT ["/usr/local/bin/availability-oracle"]
 CMD ["--ipfs", "https://ipfs.network.thegraph.com", "--subgraph", "https://gateway.network.thegraph.com/network", "--period", "300"]
