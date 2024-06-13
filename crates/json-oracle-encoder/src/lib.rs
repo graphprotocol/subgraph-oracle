@@ -11,15 +11,15 @@ struct Config {
     period: String,
     grace_period: String,
     supported_data_source_kinds: String,
-    network_subgraph_id: String,
-    epoch_block_oracle_subgraph_id: String,
+    network_subgraph_deloyment_id: String,
+    epoch_block_oracle_subgraph_deloyment_id: String,
     subgraph_availability_manager_contract: String,
     oracle_index: String,
 }
 
 #[derive(Serialize, Deserialize)]
 struct Data {
-    commit_hash: String,
+    version: String,
     config: Config,
 }
 
@@ -30,7 +30,7 @@ pub fn json_to_calldata(json: serde_json::Value) -> anyhow::Result<Vec<u8>> {
     let data: Data = serde_json::from_value(json)?;
 
     let tokens = vec![
-        Token::String(data.commit_hash),
+        Token::String(data.version),
         Token::Tuple(vec![
             Token::String(data.config.ipfs_concurrency),
             Token::String(data.config.ipfs_timeout),
@@ -38,8 +38,8 @@ pub fn json_to_calldata(json: serde_json::Value) -> anyhow::Result<Vec<u8>> {
             Token::String(data.config.period),
             Token::String(data.config.grace_period),
             Token::String(data.config.supported_data_source_kinds),
-            Token::String(data.config.network_subgraph_id),
-            Token::String(data.config.epoch_block_oracle_subgraph_id),
+            Token::String(data.config.network_subgraph_deloyment_id),
+            Token::String(data.config.epoch_block_oracle_subgraph_deloyment_id),
             Token::String(data.config.subgraph_availability_manager_contract),
             Token::String(data.config.oracle_index),
         ]),

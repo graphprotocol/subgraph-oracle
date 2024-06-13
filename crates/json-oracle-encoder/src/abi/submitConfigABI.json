@@ -3,7 +3,7 @@
       "constant": false,
       "inputs": [
         {
-          "name": "commitHash",
+          "name": "version",
           "type": "string"
         },
         {
@@ -14,8 +14,8 @@
             {"name": "period", "type": "string"},
             {"name": "gracePeriod", "type": "string"},
             {"name": "supportedDataSourceKinds", "type": "string"},
-            {"name": "networkSubgraphId", "type": "string"},
-            {"name": "epochBlockOracleSubgraphId", "type": "string"},
+            {"name": "networkSubgraphDeploymentId", "type": "string"},
+            {"name": "epochBlockOracleSubgraphDeploymentId", "type": "string"},
             {"name": "subgraphAvailabilityManagerContract", "type": "string"},
             {"name": "oracleIndex", "type": "string"}
           ],

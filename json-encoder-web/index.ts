@@ -7,7 +7,7 @@ import { output } from './webpack.config';
 require('notie/dist/notie.min.css');
 
 const samplePayload = `{
-	"commit_hash": "XXXXX",
+	"version": "v0.0.1",
 	"config": {
 		"ipfs_concurrency": "4",
 		"ipfs_timeout": "10000",
@@ -15,8 +15,8 @@ const samplePayload = `{
 		"period": "300",
 		"grace_period": "0",
 		"supported_data_source_kinds": "ethereum,ethereum/contract,file/ipfs,substreams,file/arweave",
-		"network_subgraph_id": "Fg36gCZE7pXEuZ3p8sxYzFE5UbgHtk7kcJiC5HBbfgmY",
-		"epoch_block_oracle_subgraph_id": "4KFYqUWRTZQ9gn7GPHC6YQ2q15chJfVrX43ezYcwkgxB",
+		"network_subgraph_deloyment_id": "QmSWxvd8SaQK6qZKJ7xtfxCCGoRzGnoi2WNzmJYYJW9BXY",
+		"epoch_block_oracle_subgraph_deloyment_id": "QmQEGDTb3xeykCXLdWx7pPX3qeeGMUvHmGWP4SpMkv5QJf",
 		"subgraph_availability_manager_contract": "CONTRACT_ADDRESS",
 		"oracle_index": "ORACLE_INDEX"
 	}
