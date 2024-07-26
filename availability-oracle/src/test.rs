@@ -12,7 +12,6 @@ mod tests {
     use futures::Stream;
     use std::sync::Arc;
     use std::time::Duration;
-    use std::time::SystemTime;
     use std::{pin::Pin, str::FromStr};
     use tiny_cid::Cid;
 
