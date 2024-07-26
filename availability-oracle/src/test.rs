@@ -61,7 +61,7 @@ mod tests {
                 "file/ipfs".into(),
                 "substreams".into(),
             ],
-            vec![]
+            vec![],
         )
         .await
         .unwrap();
