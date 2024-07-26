@@ -12,6 +12,7 @@ mod tests {
     use futures::Stream;
     use std::sync::Arc;
     use std::time::Duration;
+    use std::time::SystemTime;
     use std::{pin::Pin, str::FromStr};
     use tiny_cid::Cid;
 
@@ -61,9 +62,10 @@ mod tests {
                 "file/ipfs".into(),
                 "substreams".into(),
             ],
+            vec![]
         )
         .await
-        .unwrap()
+        .unwrap();
     }
 
     struct MockSubgraph;
