@@ -61,9 +61,10 @@ mod tests {
                 "file/ipfs".into(),
                 "substreams".into(),
             ],
+            vec![],
         )
         .await
-        .unwrap()
+        .unwrap();
     }
 
     struct MockSubgraph;
