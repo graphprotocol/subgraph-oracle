@@ -149,7 +149,7 @@ struct Config {
     pub oracle_index: Option<u64>,
 }
 
-const DEPLOYMENT_CACHE_TTL: Duration = Duration::from_secs(60 * 60 * 24);
+const VALID_DEPLOYMENT_CACHE_TTL: Duration = Duration::from_secs(60 * 60 * 24);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -189,8 +189,8 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
         let mut interval = tokio::time::interval(config.period);
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-        // Valid deployments get checked only every DEPLOYMENT_CACHE_TTL seconds
-        let mut deployment_cache: Vec<(Cid, SystemTime)> = Vec::new();
+        // Valid deployments get checked only every VALID_DEPLOYMENT_CACHE_TTL seconds
+        let mut valid_deployment_cache: Vec<(Cid, SystemTime)> = Vec::new();
 
         loop {
             interval.tick().await;
@@ -208,15 +208,15 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
                 grace_period,
                 epoch_subgraph.clone(),
                 &config.supported_data_source_kinds,
-                deployment_cache.clone(),
+                valid_deployment_cache.clone(),
             )
             .await
             {
                 Ok(updated_deployment_cache) => {
                     METRICS.reconcile_runs_ok.inc();
-                    deployment_cache = updated_deployment_cache;
+                    valid_deployment_cache = updated_deployment_cache;
                     info!(logger, "Deployment cache updated";
-                        "count" => deployment_cache.len()
+                        "count" => valid_deployment_cache.len()
                     );
                 }
                 Err(e) => {
@@ -302,7 +302,7 @@ pub async fn reconcile_deny_list(
     grace_period: Duration,
     epoch_subgraph: Arc<impl EpochBlockOracleSubgraph>,
     supported_ds_kinds: &[String],
-    deployment_cache: Vec<(Cid, SystemTime)>,
+    valid_deployment_cache: Vec<(Cid, SystemTime)>,
 ) -> Result<Vec<(Cid, SystemTime)>, Error> {
     let logger = logger.clone();
 
@@ -328,16 +328,16 @@ pub async fn reconcile_deny_list(
             let deployment = deployment?;
             let id = bytes32_to_cid_v0(deployment.id);
 
-            // Valid subgraphs are only checked every DEPLOYMENT_CACHE_TTL seconds to reduce IPFS requests
-            let cached = deployment_cache
+            // Valid subgraphs are only checked every VALID_DEPLOYMENT_CACHE_TTL seconds to reduce IPFS requests
+            let cached = valid_deployment_cache
                 .iter()
                 .filter(|(_, last_validated)| {
-                    last_validated.elapsed().unwrap() < DEPLOYMENT_CACHE_TTL
+                    last_validated.elapsed().unwrap() < VALID_DEPLOYMENT_CACHE_TTL
                 })
                 .find(|(cid, _)| *cid == id);
 
             if cached.is_some() {
-                METRICS.deployment_cache_hits.inc();
+                METRICS.valid_deployment_cache_hits.inc();
                 return Ok((deployment, Valid::Yes, cached.unwrap().1));
             } else {
                 let validity = match check(ipfs, id, &supported_networks, supported_ds_kinds).await
@@ -591,7 +591,7 @@ struct Metrics {
     reconcile_runs_total: prometheus::IntCounter,
     reconcile_runs_ok: prometheus::IntCounter,
     reconcile_runs_err: prometheus::IntCounter,
-    deployment_cache_hits: prometheus::IntCounter,
+    valid_deployment_cache_hits: prometheus::IntCounter,
 }
 
 lazy_static! {
@@ -616,9 +616,9 @@ impl Metrics {
                 "Total reconcile runs with errors"
             )
             .unwrap(),
-            deployment_cache_hits: prometheus::register_int_counter!(
-                "deployment_cache_hits",
-                "Total deployment cache hits"
+            valid_deployment_cache_hits: prometheus::register_int_counter!(
+                "valid_deployment_cache_hits",
+                "Total valid deployment cache hits"
             )
             .unwrap(),
         }
