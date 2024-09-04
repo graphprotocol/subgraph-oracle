@@ -27,4 +27,3 @@ USER 1000
 
 # Set the entrypoint and command
 ENTRYPOINT ["/usr/local/bin/availability-oracle"]
-CMD ["--ipfs", "https://ipfs.network.thegraph.com", "--subgraph", "https://gateway.network.thegraph.com/network", "--period", "300"]
