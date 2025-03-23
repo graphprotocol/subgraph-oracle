@@ -3,6 +3,7 @@ use bytes::Bytes;
 use common::prelude::*;
 use common::prometheus;
 use moka::future::Cache;
+use reqwest::Client;
 use std::time::Duration;
 use tiny_cid::Cid;
 
@@ -25,7 +26,7 @@ pub trait Ipfs {
 pub struct IpfsImpl {
     endpoint: String,
     semaphore: tokio::sync::Semaphore,
-    client: reqwest::Client,
+    client: Client,
 
     // Cache for CIDs; we invalidate this cache between runs to ensure we're checking
     // IPFS regularly
@@ -38,7 +39,7 @@ pub struct IpfsImpl {
 impl IpfsImpl {
     pub fn new(endpoint: String, max_concurrent: usize, timeout: Duration) -> Self {
         IpfsImpl {
-            client: reqwest::Client::new(),
+            client: Client::new(),
             endpoint,
             semaphore: tokio::sync::Semaphore::new(max_concurrent),
             cache: Cache::new(10000),
