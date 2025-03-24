@@ -3,6 +3,7 @@ use common::prelude::*;
 use futures::stream;
 use futures::Stream;
 use multibase::Base;
+use reqwest::Client;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::pin::Pin;
@@ -39,7 +40,7 @@ pub trait NetworkSubgraph {
 pub struct NetworkSubgraphImpl {
     logger: Logger,
     endpoint: String,
-    client: reqwest::Client,
+    client: Client,
 }
 
 impl NetworkSubgraphImpl {
@@ -47,7 +48,10 @@ impl NetworkSubgraphImpl {
         Arc::new(NetworkSubgraphImpl {
             logger,
             endpoint,
-            client: reqwest::Client::new(),
+            client: Client::builder()
+                .timeout(Duration::from_secs(60))
+                .build()
+                .unwrap(),
         })
     }
 }

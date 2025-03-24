@@ -6,7 +6,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::Arc;
-
+use std::time::Duration;
 pub trait EpochBlockOracleSubgraph {
     fn supported_networks(self: Arc<Self>) -> Pin<Box<dyn Stream<Item = Result<String, Error>>>>;
 }
@@ -22,7 +22,10 @@ impl EpochBlockOracleSubgraphImpl {
         Arc::new(EpochBlockOracleSubgraphImpl {
             logger,
             endpoint,
-            client: Client::new(),
+            client: Client::builder()
+                .timeout(Duration::from_secs(60))
+                .build()
+                .unwrap(),
         })
     }
 }
