@@ -433,7 +433,7 @@ enum Invalid {
     Unavailable(Cid, Error),
     ManifestParseError(Error),
     SchemaParseError(Error),
-    WasmParseError(Error),
+    WasmParseError(Cid, String, Error),
     AbiParseError(Error),
     ForbiddenApi(String),
     UnsupportedNetwork(String),
@@ -449,7 +449,7 @@ impl Display for Invalid {
             Unavailable(cid, e) => write!(f, "unavailable cid: {} ({})", cid, e),
             ManifestParseError(e) => write!(f, "manifest parse error: {}", e),
             SchemaParseError(e) => write!(f, "schema parse error: {}", e),
-            WasmParseError(e) => write!(f, "wasm parse error: {}", e),
+            WasmParseError(cid, wasm, e) => write!(f, "error validating wasm. cid: {}, wasm parse error: {}, wasm as string: {}", cid, e, wasm),
             AbiParseError(e) => write!(f, "abi parse error: {}", e),
             ForbiddenApi(api) => write!(f, "use of forbidden api: {}", api),
             UnsupportedNetwork(network_id) => write!(f, "unsupported network: {}", network_id),
@@ -574,9 +574,11 @@ async fn check(
 
         // Check mappings.
         if let Some(file) = file {
-            let wasm = ipfs.cat(check_link(file)?).await?;
+            let cid = check_link(file)?;
+            let wasm = ipfs.cat(cid.clone()).await?;
+            let wasm_as_string = format!("{:#?}",wasm);
             if let Some(host_fn) = calls_any_host_fn(&wasm, FORBIDDEN_HOST_FN_PREFIX)
-                .map_err(Invalid::WasmParseError)?
+                .map_err(|e| Invalid::WasmParseError(cid, wasm_as_string, e.into()))?
             {
                 return Err(Invalid::ForbiddenApi(host_fn.to_string()).into());
             }
