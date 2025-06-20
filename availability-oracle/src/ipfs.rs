@@ -10,6 +10,7 @@ use tiny_cid::Cid;
 pub enum IpfsError {
     GatewayTimeout(Cid, Error), // Gateway/Cloudflare timed-out
     ClientTimeout(Cid, Error),  // Client timed-out when requesting the file
+    NotFound(Cid, Error),       // Manifest not found
     Other(Error),
 }
 
@@ -69,6 +70,7 @@ impl IpfsImpl {
                     IpfsError::GatewayTimeout(arg, e.into())
                 }
                 _ if e.is_timeout() => IpfsError::ClientTimeout(arg, e.into()),
+                Some(NOT_FOUND) => IpfsError::NotFound(arg, e.into()),
                 _ => IpfsError::Other(e.into()),
             })
     }
@@ -76,6 +78,7 @@ impl IpfsImpl {
 
 const CLOUDFLARE_TIMEOUT: u16 = 524;
 const GATEWAY_TIMEOUT: u16 = 504;
+const NOT_FOUND: u16 = 404;
 
 #[async_trait]
 impl Ipfs for IpfsImpl {
