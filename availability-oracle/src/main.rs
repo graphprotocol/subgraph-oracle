@@ -472,6 +472,7 @@ impl From<IpfsError> for CheckError {
             IpfsError::ClientTimeout(cid, err) => {
                 CheckError::Invalid(Invalid::Unavailable(cid, err))
             }
+            IpfsError::NotFound(cid, err) => CheckError::Invalid(Invalid::Unavailable(cid, err)),
             IpfsError::Other(e) => CheckError::Other(e),
         }
     }
