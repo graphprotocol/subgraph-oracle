@@ -52,11 +52,7 @@ impl IpfsImpl {
         let _permit = self.semaphore.acquire().await;
 
         // Using standard IPFS gateway URL format
-        let url = format!(
-            "{}/ipfs/{}",
-            self.endpoint.trim_end_matches('/'),
-            cid
-        );
+        let url = format!("{}/ipfs/{}", self.endpoint.trim_end_matches('/'), cid);
         self.client
             .get(&url)
             .timeout(self.timeout)
