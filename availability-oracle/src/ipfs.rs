@@ -48,15 +48,14 @@ impl IpfsImpl {
         }
     }
 
-    async fn call(&self, route: &'static str, arg: Cid) -> Result<reqwest::Response, IpfsError> {
+    async fn call(&self, cid: Cid) -> Result<reqwest::Response, IpfsError> {
         let _permit = self.semaphore.acquire().await;
 
-        // URL security: We control the endpoint and the route, the `arg` is a CID.
+        // Using standard IPFS gateway URL format
         let url = format!(
-            "{}/api/v0/{}?arg={}",
+            "{}/ipfs/{}",
             self.endpoint.trim_end_matches('/'),
-            route,
-            arg
+            cid
         );
         self.client
             .get(&url)
@@ -67,10 +66,10 @@ impl IpfsImpl {
             .and_then(|x| x)
             .map_err(|e| match e.status().map(|e| e.as_u16()) {
                 Some(GATEWAY_TIMEOUT) | Some(CLOUDFLARE_TIMEOUT) => {
-                    IpfsError::GatewayTimeout(arg, e.into())
+                    IpfsError::GatewayTimeout(cid, e.into())
                 }
-                _ if e.is_timeout() => IpfsError::ClientTimeout(arg, e.into()),
-                Some(NOT_FOUND) => IpfsError::NotFound(arg, e.into()),
+                _ if e.is_timeout() => IpfsError::ClientTimeout(cid, e.into()),
+                Some(NOT_FOUND) => IpfsError::NotFound(cid, e.into()),
                 _ => IpfsError::Other(e.into()),
             })
     }
@@ -97,7 +96,7 @@ impl Ipfs for IpfsImpl {
         ) -> Result<reqwest::Response, IpfsError> {
             let mut last_err = None;
             for _ in 0..=retries {
-                match ipfs.call("cat", cid).await {
+                match ipfs.call(cid).await {
                     Ok(res) => return Ok(res),
                     Err(e) => {
                         last_err = Some(e);
