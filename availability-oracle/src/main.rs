@@ -190,6 +190,18 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
         oracle_index: config.oracle_index,
     };
 
+    let signing_key: Option<SecretKey> = if config.dry_run {
+        None
+    } else {
+        Some(
+            config
+                .signing_key
+                .as_ref()
+                .expect("signing_key is required unless dry-run")
+                .parse()?,
+        )
+    };
+
     if config.dry_run {
         info!(
             logger,
@@ -210,11 +222,7 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
             .await;
         }
     } else {
-        let signing_key: SecretKey = config
-            .signing_key
-            .as_ref()
-            .expect("signing_key is required unless dry-run")
-            .parse()?;
+        let signing_key = signing_key.as_ref().unwrap();
         let wallet = LocalWallet::from_bytes(signing_key.as_ref()).unwrap();
         info!(logger, "Signing account {}", wallet.address().to_string());
 
@@ -260,10 +268,9 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
     let contract: Box<dyn StateManager> = if config.dry_run {
         Box::new(StateManagerDryRun::new(logger.clone()))
     } else {
-        let signing_key: SecretKey = config.signing_key.unwrap().parse()?;
         state_manager(
             config.url,
-            &signing_key,
+            signing_key.as_ref().unwrap(),
             config.rewards_manager_contract,
             config.subgraph_availability_manager_contract,
             config.oracle_index,
