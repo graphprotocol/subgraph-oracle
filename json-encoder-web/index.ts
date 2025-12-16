@@ -15,8 +15,8 @@ const samplePayload = `{
 		"period": "300",
 		"grace_period": "0",
 		"supported_data_source_kinds": "ethereum,ethereum/contract,file/ipfs,substreams,file/arweave",
-		"network_subgraph_deloyment_id": "QmSWxvd8SaQK6qZKJ7xtfxCCGoRzGnoi2WNzmJYYJW9BXY",
-		"epoch_block_oracle_subgraph_deloyment_id": "QmQEGDTb3xeykCXLdWx7pPX3qeeGMUvHmGWP4SpMkv5QJf",
+		"network_subgraph_deployment_id": "QmSWxvd8SaQK6qZKJ7xtfxCCGoRzGnoi2WNzmJYYJW9BXY",
+		"epoch_block_oracle_subgraph_deployment_id": "QmQEGDTb3xeykCXLdWx7pPX3qeeGMUvHmGWP4SpMkv5QJf",
 		"subgraph_availability_manager_contract": "CONTRACT_ADDRESS",
 		"oracle_index": "ORACLE_INDEX"
 	}
