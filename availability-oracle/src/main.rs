@@ -1,5 +1,7 @@
 mod contract;
+mod data_edge;
 mod epoch_block_oracle_subgraph;
+mod graph_monitoring_subgraph;
 mod ipfs;
 mod manifest;
 mod network_subgraph;
@@ -9,10 +11,12 @@ mod util;
 use common::prelude::*;
 use common::prometheus;
 use contract::*;
+use data_edge::{build_oracle_config, log_dry_run_config, DataEdgeContract, OracleConfigParams};
 use epoch_block_oracle_subgraph::{EpochBlockOracleSubgraph, EpochBlockOracleSubgraphImpl};
 use ethers::abi::Address;
 use ethers::signers::LocalWallet;
 use ethers::signers::Signer;
+use graph_monitoring_subgraph::GraphMonitoringSubgraphImpl;
 use ipfs::*;
 use manifest::{Abi, DataSource, Manifest, Mapping};
 use network_subgraph::*;
@@ -147,6 +151,22 @@ struct Config {
         help = "Assigned index for the oracle, to be used when voting on SubgraphAvailabilityManager"
     )]
     pub oracle_index: Option<u64>,
+
+    #[structopt(
+        long,
+        env = "DATA_EDGE_CONTRACT",
+        required_unless("dry-run"),
+        help = "The address of the DataEdge contract for posting oracle configuration"
+    )]
+    pub data_edge_contract: Option<Address>,
+
+    #[structopt(
+        long,
+        env = "GRAPH_MONITORING_SUBGRAPH",
+        required_unless("dry-run"),
+        help = "GraphQL endpoint to the graph-monitoring subgraph for checking current oracle config"
+    )]
+    pub graph_monitoring_subgraph: Option<String>,
 }
 
 const VALID_DEPLOYMENT_CACHE_TTL: Duration = Duration::from_secs(60 * 60 * 24);
@@ -157,28 +177,107 @@ async fn main() -> Result<()> {
 }
 
 async fn run(logger: Logger, config: Config) -> Result<()> {
-    let ipfs = IpfsImpl::new(config.ipfs, config.ipfs_concurrency, config.ipfs_timeout);
-    let subgraph = NetworkSubgraphImpl::new(logger.clone(), config.subgraph);
-    let epoch_subgraph =
-        EpochBlockOracleSubgraphImpl::new(logger.clone(), config.epoch_block_oracle_subgraph);
-    let contract: Box<dyn StateManager> = if config.dry_run {
+    let config_params = OracleConfigParams {
+        ipfs_concurrency: config.ipfs_concurrency,
+        ipfs_timeout: config.ipfs_timeout,
+        min_signal: config.min_signal,
+        period: config.period,
+        grace_period: config.grace_period,
+        supported_data_source_kinds: &config.supported_data_source_kinds,
+        network_subgraph_url: &config.subgraph,
+        epoch_block_oracle_subgraph_url: &config.epoch_block_oracle_subgraph,
+        subgraph_availability_manager_contract: config.subgraph_availability_manager_contract,
+        oracle_index: config.oracle_index,
+    };
+
+    let signing_key: Option<SecretKey> = if config.dry_run {
+        None
+    } else {
+        Some(
+            config
+                .signing_key
+                .as_ref()
+                .expect("signing_key is required unless dry-run")
+                .parse()?,
+        )
+    };
+
+    if config.dry_run {
         info!(
             logger,
             "Running in dry mode: no transactions will be submitted on chain!"
         );
-        Box::new(StateManagerDryRun::new(logger.clone()))
+        // In dry-run mode, build local config and check against subgraph if available
+        if let Ok(local_config) = build_oracle_config(&config_params) {
+            let monitoring_subgraph = config
+                .graph_monitoring_subgraph
+                .as_ref()
+                .map(|endpoint| GraphMonitoringSubgraphImpl::new(endpoint.clone()));
+            log_dry_run_config(
+                &logger,
+                &local_config,
+                monitoring_subgraph.as_ref(),
+                config.oracle_index,
+            )
+            .await;
+        }
     } else {
-        let signing_key: &SecretKey = &config.signing_key.unwrap().parse()?;
+        let signing_key = signing_key.as_ref().unwrap();
         let wallet = LocalWallet::from_bytes(signing_key.as_ref()).unwrap();
         info!(logger, "Signing account {}", wallet.address().to_string());
+
+        // Build local config and post to DataEdge if changed
+        let local_config = build_oracle_config(&config_params)?;
+        let oracle_index = config
+            .oracle_index
+            .ok_or_else(|| anyhow!("oracle_index is required for DataEdge posting"))?;
+
+        let monitoring_subgraph = GraphMonitoringSubgraphImpl::new(
+            config
+                .graph_monitoring_subgraph
+                .as_ref()
+                .expect("graph_monitoring_subgraph is required unless dry-run")
+                .clone(),
+        );
+
+        let data_edge = DataEdgeContract::new(
+            &signing_key,
+            config.url.clone(),
+            config
+                .data_edge_contract
+                .expect("data_edge_contract is required unless dry-run"),
+            logger.clone(),
+        )
+        .await?;
+
+        data_edge
+            .post_config_if_changed(&local_config, &monitoring_subgraph, oracle_index)
+            .await?;
+    }
+
+    let ipfs = IpfsImpl::new(
+        config.ipfs.clone(),
+        config.ipfs_concurrency,
+        config.ipfs_timeout,
+    );
+    let subgraph = NetworkSubgraphImpl::new(logger.clone(), config.subgraph.clone());
+    let epoch_subgraph = EpochBlockOracleSubgraphImpl::new(
+        logger.clone(),
+        config.epoch_block_oracle_subgraph.clone(),
+    );
+    let contract: Box<dyn StateManager> = if config.dry_run {
+        Box::new(StateManagerDryRun::new(logger.clone()))
+    } else {
         state_manager(
             config.url,
-            signing_key,
+            signing_key.as_ref().unwrap(),
             config.rewards_manager_contract,
             config.subgraph_availability_manager_contract,
             config.oracle_index,
-            logger.clone()
-        ).await.expect("Configuration error: either [`REWARDS_MANAGER_CONTRACT`] or [`SUBGRAPH_AVAILABILITY_MANAGER_CONTRACT` and `ORACLE_INDEX`] must be provided.")
+            logger.clone(),
+        )
+        .await
+        .expect("Configuration error: either [`REWARDS_MANAGER_CONTRACT`] or [`SUBGRAPH_AVAILABILITY_MANAGER_CONTRACT` and `ORACLE_INDEX`] must be provided.")
     };
     let grace_period = Duration::from_secs(config.grace_period);
 

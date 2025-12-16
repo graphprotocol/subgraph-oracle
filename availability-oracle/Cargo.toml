@@ -1,6 +1,6 @@
 [package]
 name = "availability-oracle"
-version = "0.3.4"
+version = "1.4.0"
 authors = ["Leonardo Yvens <leoyvens@gmail.com>"]
 edition = "2018"
 
@@ -27,3 +27,4 @@ graphql-parser = "0.4.0"
 secp256k1 = "0.28.2"
 ethers = "2.0.14"
 url = "2.5.0"
+json-oracle-encoder = { path = "../crates/json-oracle-encoder" }
