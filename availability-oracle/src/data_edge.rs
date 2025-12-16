@@ -1,6 +1,18 @@
 use crate::graph_monitoring_subgraph::{GraphMonitoringSubgraph, OracleConfig};
 use common::prelude::*;
 use ethers::abi::Address;
+
+/// Result of checking config status against the subgraph.
+pub enum ConfigStatus {
+    /// Config matches what's in the subgraph
+    Unchanged,
+    /// Config differs from subgraph (includes list of changed field names)
+    Changed(Vec<&'static str>),
+    /// Oracle not found in subgraph (first time posting)
+    NotFound,
+    /// Failed to fetch from subgraph
+    FetchError(Error),
+}
 use ethers::core::types::U256;
 use ethers::middleware::SignerMiddleware;
 use ethers::providers::{Http, Middleware, Provider};
@@ -74,6 +86,26 @@ pub fn build_oracle_config(params: &OracleConfigParams) -> Result<OracleConfig, 
     })
 }
 
+/// Checks the local config against the subgraph to determine if it has changed.
+pub async fn check_config_status(
+    local_config: &OracleConfig,
+    monitoring_subgraph: &impl GraphMonitoringSubgraph,
+    oracle_index: u64,
+) -> ConfigStatus {
+    match monitoring_subgraph.fetch_oracle_config(oracle_index).await {
+        Ok(Some(current_config)) => {
+            if *local_config == current_config {
+                ConfigStatus::Unchanged
+            } else {
+                let changed_fields = local_config.diff(&current_config);
+                ConfigStatus::Changed(changed_fields)
+            }
+        }
+        Ok(None) => ConfigStatus::NotFound,
+        Err(e) => ConfigStatus::FetchError(e),
+    }
+}
+
 pub struct DataEdgeContract {
     provider: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
     contract_address: Address,
@@ -114,28 +146,25 @@ impl DataEdgeContract {
         monitoring_subgraph: &impl GraphMonitoringSubgraph,
         oracle_index: u64,
     ) -> Result<bool, Error> {
-        // Check current config from subgraph
-        match monitoring_subgraph.fetch_oracle_config(oracle_index).await {
-            Ok(Some(current_config)) => {
-                if *local_config == current_config {
-                    info!(self.logger, "Config unchanged, skipping DataEdge post";
-                        "oracle_index" => oracle_index
-                    );
-                    return Ok(false);
-                } else {
-                    let changed_fields = local_config.diff(&current_config);
-                    info!(self.logger, "Config changed, will post to DataEdge";
-                        "oracle_index" => oracle_index,
-                        "changed_fields" => changed_fields.join(",")
-                    );
-                }
+        match check_config_status(local_config, monitoring_subgraph, oracle_index).await {
+            ConfigStatus::Unchanged => {
+                info!(self.logger, "Config unchanged, skipping DataEdge post";
+                    "oracle_index" => oracle_index
+                );
+                return Ok(false);
             }
-            Ok(None) => {
+            ConfigStatus::Changed(changed_fields) => {
+                info!(self.logger, "Config changed, will post to DataEdge";
+                    "oracle_index" => oracle_index,
+                    "changed_fields" => changed_fields.join(",")
+                );
+            }
+            ConfigStatus::NotFound => {
                 info!(self.logger, "Oracle not found in subgraph, posting initial config";
                     "oracle_index" => oracle_index
                 );
             }
-            Err(e) => {
+            ConfigStatus::FetchError(e) => {
                 warn!(self.logger, "Failed to fetch current oracle config from subgraph, will post anyway";
                     "oracle_index" => oracle_index,
                     "error" => format!("{:#}", e)
@@ -217,26 +246,24 @@ pub async fn log_dry_run_config(
     oracle_index: Option<u64>,
 ) {
     if let (Some(subgraph), Some(oracle_index)) = (monitoring_subgraph, oracle_index) {
-        match subgraph.fetch_oracle_config(oracle_index).await {
-            Ok(Some(current_config)) => {
-                if *local_config == current_config {
-                    info!(logger, "Config unchanged, would skip DataEdge post (dry-run)";
-                        "oracle_index" => oracle_index
-                    );
-                } else {
-                    let changed_fields = local_config.diff(&current_config);
-                    info!(logger, "Config changed, would post to DataEdge (dry-run)";
-                        "oracle_index" => oracle_index,
-                        "changed_fields" => changed_fields.join(",")
-                    );
-                }
+        match check_config_status(local_config, subgraph, oracle_index).await {
+            ConfigStatus::Unchanged => {
+                info!(logger, "Config unchanged, would skip DataEdge post (dry-run)";
+                    "oracle_index" => oracle_index
+                );
             }
-            Ok(None) => {
+            ConfigStatus::Changed(changed_fields) => {
+                info!(logger, "Config changed, would post to DataEdge (dry-run)";
+                    "oracle_index" => oracle_index,
+                    "changed_fields" => changed_fields.join(",")
+                );
+            }
+            ConfigStatus::NotFound => {
                 info!(logger, "Oracle not found in subgraph, would post initial config (dry-run)";
                     "oracle_index" => oracle_index
                 );
             }
-            Err(e) => {
+            ConfigStatus::FetchError(e) => {
                 warn!(logger, "Failed to fetch current config (dry-run)";
                     "error" => format!("{:#}", e)
                 );
@@ -262,6 +289,122 @@ pub async fn log_dry_run_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
+
+    fn test_config() -> OracleConfig {
+        OracleConfig {
+            version: "v1.0.0".to_string(),
+            ipfs_concurrency: "10".to_string(),
+            ipfs_timeout: "30000".to_string(),
+            min_signal: "100".to_string(),
+            period: "60".to_string(),
+            grace_period: "10".to_string(),
+            supported_data_source_kinds: "ethereum,file/ipfs".to_string(),
+            network_subgraph_deployment_id: "Qm123".to_string(),
+            epoch_block_oracle_subgraph_deployment_id: "Qm456".to_string(),
+            subgraph_availability_manager_contract: "0x123".to_string(),
+            oracle_index: "0".to_string(),
+        }
+    }
+
+    struct MockSubgraphUnchanged(OracleConfig);
+
+    #[async_trait]
+    impl GraphMonitoringSubgraph for MockSubgraphUnchanged {
+        async fn fetch_oracle_config(
+            &self,
+            _oracle_index: u64,
+        ) -> Result<Option<OracleConfig>, Error> {
+            Ok(Some(self.0.clone()))
+        }
+    }
+
+    struct MockSubgraphChanged(OracleConfig);
+
+    #[async_trait]
+    impl GraphMonitoringSubgraph for MockSubgraphChanged {
+        async fn fetch_oracle_config(
+            &self,
+            _oracle_index: u64,
+        ) -> Result<Option<OracleConfig>, Error> {
+            Ok(Some(self.0.clone()))
+        }
+    }
+
+    struct MockSubgraphNotFound;
+
+    #[async_trait]
+    impl GraphMonitoringSubgraph for MockSubgraphNotFound {
+        async fn fetch_oracle_config(
+            &self,
+            _oracle_index: u64,
+        ) -> Result<Option<OracleConfig>, Error> {
+            Ok(None)
+        }
+    }
+
+    struct MockSubgraphError;
+
+    #[async_trait]
+    impl GraphMonitoringSubgraph for MockSubgraphError {
+        async fn fetch_oracle_config(
+            &self,
+            _oracle_index: u64,
+        ) -> Result<Option<OracleConfig>, Error> {
+            Err(anyhow!("Mock fetch error"))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_check_config_status_unchanged() {
+        let config = test_config();
+        let mock = MockSubgraphUnchanged(config.clone());
+
+        let status = check_config_status(&config, &mock, 0).await;
+        assert!(matches!(status, ConfigStatus::Unchanged));
+    }
+
+    #[tokio::test]
+    async fn test_check_config_status_changed() {
+        let local_config = test_config();
+        let mut remote_config = test_config();
+        remote_config.version = "v2.0.0".to_string();
+        remote_config.min_signal = "200".to_string();
+        let mock = MockSubgraphChanged(remote_config);
+
+        let status = check_config_status(&local_config, &mock, 0).await;
+        match status {
+            ConfigStatus::Changed(fields) => {
+                assert!(fields.contains(&"version"));
+                assert!(fields.contains(&"min_signal"));
+                assert_eq!(fields.len(), 2);
+            }
+            _ => panic!("Expected ConfigStatus::Changed"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_check_config_status_not_found() {
+        let config = test_config();
+        let mock = MockSubgraphNotFound;
+
+        let status = check_config_status(&config, &mock, 0).await;
+        assert!(matches!(status, ConfigStatus::NotFound));
+    }
+
+    #[tokio::test]
+    async fn test_check_config_status_fetch_error() {
+        let config = test_config();
+        let mock = MockSubgraphError;
+
+        let status = check_config_status(&config, &mock, 0).await;
+        match status {
+            ConfigStatus::FetchError(e) => {
+                assert!(e.to_string().contains("Mock fetch error"));
+            }
+            _ => panic!("Expected ConfigStatus::FetchError"),
+        }
+    }
 
     #[test]
     fn test_extract_deployment_id_from_url_valid() {
