@@ -188,8 +188,8 @@ impl DataEdgeContract {
                 "period": &config.period,
                 "grace_period": &config.grace_period,
                 "supported_data_source_kinds": &config.supported_data_source_kinds,
-                "network_subgraph_deloyment_id": &config.network_subgraph_deployment_id,
-                "epoch_block_oracle_subgraph_deloyment_id": &config.epoch_block_oracle_subgraph_deployment_id,
+                "network_subgraph_deployment_id": &config.network_subgraph_deployment_id,
+                "epoch_block_oracle_subgraph_deployment_id": &config.epoch_block_oracle_subgraph_deployment_id,
                 "subgraph_availability_manager_contract": &config.subgraph_availability_manager_contract,
                 "oracle_index": &config.oracle_index,
             }
