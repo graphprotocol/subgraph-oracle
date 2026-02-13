@@ -11,11 +11,17 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
+        --data-edge-contract <data-edge-contract>
+            The address of the DataEdge contract for posting oracle configuration [env: DATA_EDGE_CONTRACT=]
+
         --epoch-block-oracle-subgraph <subgraph>
             Graphql endpoint to the epoch block oracle subgraph used for fetching supported networks [env: EPOCH_BLOCK_ORACLE_SUBGRAPH=]
 
         --grace-period <grace-period>
             Grace period, in seconds from subgraph creation, for which subgraphs will not be checked [env: ORACLE_GRACE_PERIOD=]  [default: 0]
+
+        --graph-monitoring-subgraph <graph-monitoring-subgraph>
+            GraphQL endpoint to the graph-monitoring subgraph for checking current oracle config [env: GRAPH_MONITORING_SUBGRAPH=]
         
         --ipfs <ipfs>
             IPFS endpoint with access to the subgraph files [env: ORACLE_IPFS=]
@@ -81,7 +87,9 @@ cargo run -p availability-oracle -- \
     --url <url> \
     --subgraph-availability-manager-contract <address> \
     --oracle-index <index> \
-    --signing-key <signing-key>
+    --signing-key <signing-key> \
+    --data-edge-contract <data-edge-address> \
+    --graph-monitoring-subgraph <graph-monitoring-subgraph-url>
 ```
 
 ### Example command to run `RewardsManager` configuration:
@@ -93,5 +101,7 @@ cargo run -p availability-oracle -- \
     --min-signal 10000 \
     --url <url> \
     --rewards-manager-contract <address> \
-    --signing-key <signing-key>
+    --signing-key <signing-key> \
+    --data-edge-contract <data-edge-address> \
+    --graph-monitoring-subgraph <graph-monitoring-subgraph-url>
 ```
