@@ -10,4 +10,4 @@ RUN rm -rf /src
 
 USER 1000
 ENTRYPOINT ["/usr/local/cargo/bin/availability-oracle"]
-CMD ["--ipfs", "https://ipfs.network.thegraph.com", "--subgraph", "https://gateway.network.thegraph.com/network", "--period", "300"]
+CMD ["--ipfs", "https://ipfs.thegraph.com", "--subgraph", "https://gateway.network.thegraph.com/network", "--period", "300"]
