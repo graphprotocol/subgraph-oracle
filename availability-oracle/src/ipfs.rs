@@ -11,6 +11,7 @@ pub enum IpfsError {
     GatewayTimeout(Cid, Error), // Gateway/Cloudflare timed-out
     ClientTimeout(Cid, Error),  // Client timed-out when requesting the file
     NotFound(Cid, Error),       // Manifest not found
+    Denied(Cid, Error),         // Gateway refuses to serve this object (auth/denylist/removed)
     Other(Error),
 }
 
@@ -66,6 +67,9 @@ impl IpfsImpl {
                 }
                 _ if e.is_timeout() => IpfsError::ClientTimeout(cid, e.into()),
                 Some(NOT_FOUND) => IpfsError::NotFound(cid, e.into()),
+                Some(UNAUTHORIZED) | Some(FORBIDDEN) | Some(GONE) | Some(UNAVAILABLE_LEGAL) => {
+                    IpfsError::Denied(cid, e.into())
+                }
                 _ => IpfsError::Other(e.into()),
             })
     }
@@ -74,6 +78,10 @@ impl IpfsImpl {
 const CLOUDFLARE_TIMEOUT: u16 = 524;
 const GATEWAY_TIMEOUT: u16 = 504;
 const NOT_FOUND: u16 = 404;
+const UNAUTHORIZED: u16 = 401;
+const FORBIDDEN: u16 = 403;
+const GONE: u16 = 410;
+const UNAVAILABLE_LEGAL: u16 = 451;
 
 #[async_trait]
 impl Ipfs for IpfsImpl {
