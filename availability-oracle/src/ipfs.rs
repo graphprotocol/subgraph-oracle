@@ -67,9 +67,6 @@ impl IpfsImpl {
                 }
                 _ if e.is_timeout() => IpfsError::ClientTimeout(cid, e.into()),
                 Some(NOT_FOUND) => IpfsError::NotFound(cid, e.into()),
-                // The gateway can refuse to serve a specific object (auth, denylist, or
-                // legal/removed content). This is object-specific, so treat it like a
-                // missing file rather than aborting the whole reconciliation.
                 Some(UNAUTHORIZED) | Some(FORBIDDEN) | Some(GONE) | Some(UNAVAILABLE_LEGAL) => {
                     IpfsError::Denied(cid, e.into())
                 }
