@@ -119,7 +119,17 @@ impl StateManager for RewardsManagerContract {
             // Increase the estimated gas by 20%
             let increased_estimate = estimated_gas * U256::from(120) / U256::from(100);
 
-            tx.gas(increased_estimate).send().await?.await?;
+            // Set a legacy gas price explicitly. Left unset, ethers fills the
+            // EIP-1559 fields from its default estimator, which hardcodes a
+            // 3 gwei priority fee - roughly 150x the Arbitrum base fee.
+            let gas_price = self.contract.client().get_gas_price().await?;
+            let gas_price_with_buffer = gas_price * U256::from(120) / U256::from(100);
+
+            tx.gas(increased_estimate)
+                .gas_price(gas_price_with_buffer)
+                .send()
+                .await?
+                .await?;
             METRICS.denied_subgraphs_total.inc_by(num_subgraphs);
         }
 
@@ -156,7 +166,17 @@ impl StateManager for SubgraphAvailabilityManagerContract {
             // Increase the estimated gas by 20%
             let increased_estimate = estimated_gas * U256::from(120) / U256::from(100);
 
-            tx.gas(increased_estimate).send().await?.await?;
+            // Set a legacy gas price explicitly. Left unset, ethers fills the
+            // EIP-1559 fields from its default estimator, which hardcodes a
+            // 3 gwei priority fee - roughly 150x the Arbitrum base fee.
+            let gas_price = self.contract.client().get_gas_price().await?;
+            let gas_price_with_buffer = gas_price * U256::from(120) / U256::from(100);
+
+            tx.gas(increased_estimate)
+                .gas_price(gas_price_with_buffer)
+                .send()
+                .await?
+                .await?;
             METRICS.denied_subgraphs_total.inc_by(num_subgraphs);
         }
 
