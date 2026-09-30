@@ -572,6 +572,7 @@ impl From<IpfsError> for CheckError {
                 CheckError::Invalid(Invalid::Unavailable(cid, err))
             }
             IpfsError::NotFound(cid, err) => CheckError::Invalid(Invalid::Unavailable(cid, err)),
+            IpfsError::Denied(cid, err) => CheckError::Invalid(Invalid::Unavailable(cid, err)),
             IpfsError::Other(e) => CheckError::Other(e),
         }
     }
