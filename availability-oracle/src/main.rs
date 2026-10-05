@@ -14,6 +14,7 @@ use contract::*;
 use data_edge::{build_oracle_config, log_dry_run_config, DataEdgeContract, OracleConfigParams};
 use epoch_block_oracle_subgraph::{EpochBlockOracleSubgraph, EpochBlockOracleSubgraphImpl};
 use ethers::abi::Address;
+use ethers::providers::{Http, Middleware, Provider};
 use ethers::signers::LocalWallet;
 use ethers::signers::Signer;
 use graph_monitoring_subgraph::GraphMonitoringSubgraphImpl;
@@ -98,7 +99,8 @@ struct Config {
         long,
         env = "ORACLE_SIGNING_KEY",
         required_unless("dry-run"),
-        help = "The secret key of the oracle for signing transactions"
+        hide_env_values = true,
+        help = "Comma separated secret keys of the oracle signers, paired by position with --oracle-index"
     )]
     signing_key: Option<String>,
 
@@ -148,9 +150,10 @@ struct Config {
     #[structopt(
         long,
         env = "ORACLE_INDEX",
-        help = "Assigned index for the oracle, to be used when voting on SubgraphAvailabilityManager"
+        help = "Comma separated oracle indexes, to be used when voting on SubgraphAvailabilityManager. \
+                Paired by position with --signing-key"
     )]
-    pub oracle_index: Option<u64>,
+    pub oracle_index: Option<String>,
 
     #[structopt(
         long,
@@ -187,19 +190,30 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
         network_subgraph_url: &config.subgraph,
         epoch_block_oracle_subgraph_url: &config.epoch_block_oracle_subgraph,
         subgraph_availability_manager_contract: config.subgraph_availability_manager_contract,
-        oracle_index: config.oracle_index,
+        oracle_index: None,
     };
 
-    let signing_key: Option<SecretKey> = if config.dry_run {
+    let signing_keys = split_list(&config.signing_key);
+    let oracle_indexes = parse_indexes(&config.oracle_index)?;
+    let signers: Vec<(SecretKey, u64)> = if config.dry_run && signing_keys.is_empty() {
+        Vec::new()
+    } else {
+        parse_signers(&signing_keys, &oracle_indexes)?
+    };
+    if !config.dry_run {
+        validate_mode(
+            signers.len(),
+            config.rewards_manager_contract,
+            config.subgraph_availability_manager_contract,
+        )?;
+    }
+
+    let rpc = if config.dry_run {
         None
     } else {
-        Some(
-            config
-                .signing_key
-                .as_ref()
-                .expect("signing_key is required unless dry-run")
-                .parse()?,
-        )
+        let provider = http_provider(config.url.clone());
+        let chain_id = provider.get_chainid().await?.as_u64();
+        Some((provider, chain_id))
     };
 
     if config.dry_run {
@@ -208,30 +222,30 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
             "Running in dry mode: no transactions will be submitted on chain!"
         );
         // In dry-run mode, build local config and check against subgraph if available
-        if let Ok(local_config) = build_oracle_config(&config_params) {
-            let monitoring_subgraph = config
-                .graph_monitoring_subgraph
-                .as_ref()
-                .map(|endpoint| GraphMonitoringSubgraphImpl::new(endpoint.clone()));
-            log_dry_run_config(
-                &logger,
-                &local_config,
-                monitoring_subgraph.as_ref(),
-                config.oracle_index,
-            )
-            .await;
+        let monitoring_subgraph = config
+            .graph_monitoring_subgraph
+            .as_ref()
+            .map(|endpoint| GraphMonitoringSubgraphImpl::new(endpoint.clone()));
+        let dry_run_indexes: Vec<Option<u64>> = if oracle_indexes.is_empty() {
+            vec![None]
+        } else {
+            oracle_indexes.iter().copied().map(Some).collect()
+        };
+        for oracle_index in dry_run_indexes {
+            if let Ok(local_config) = build_oracle_config(&OracleConfigParams {
+                oracle_index,
+                ..config_params
+            }) {
+                log_dry_run_config(
+                    &logger,
+                    &local_config,
+                    monitoring_subgraph.as_ref(),
+                    oracle_index,
+                )
+                .await;
+            }
         }
     } else {
-        let signing_key = signing_key.as_ref().unwrap();
-        let wallet = LocalWallet::from_bytes(signing_key.as_ref()).unwrap();
-        info!(logger, "Signing account {}", wallet.address().to_string());
-
-        // Build local config and post to DataEdge if changed
-        let local_config = build_oracle_config(&config_params)?;
-        let oracle_index = config
-            .oracle_index
-            .ok_or_else(|| anyhow!("oracle_index is required for DataEdge posting"))?;
-
         let monitoring_subgraph = GraphMonitoringSubgraphImpl::new(
             config
                 .graph_monitoring_subgraph
@@ -239,20 +253,45 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
                 .expect("graph_monitoring_subgraph is required unless dry-run")
                 .clone(),
         );
+        let data_edge_contract = config
+            .data_edge_contract
+            .expect("data_edge_contract is required unless dry-run");
 
-        let data_edge = DataEdgeContract::new(
-            &signing_key,
-            config.url.clone(),
-            config
-                .data_edge_contract
-                .expect("data_edge_contract is required unless dry-run"),
-            logger.clone(),
-        )
-        .await?;
+        let (provider, chain_id) = rpc.clone().expect("rpc is set unless dry-run");
 
-        data_edge
-            .post_config_if_changed(&local_config, &monitoring_subgraph, oracle_index)
-            .await?;
+        // Each signer posts its own config, the monitoring subgraph only accepts
+        // a config from the address registered for its oracle index
+        for (signing_key, oracle_index) in &signers {
+            let signer_logger = logger.new(o!("oracle_index" => *oracle_index));
+            let wallet = LocalWallet::from_bytes(signing_key.as_ref()).unwrap();
+            info!(
+                signer_logger,
+                "Signing account {}",
+                wallet.address().to_string()
+            );
+
+            let local_config = build_oracle_config(&OracleConfigParams {
+                oracle_index: Some(*oracle_index),
+                ..config_params
+            })?;
+
+            let data_edge = DataEdgeContract::new(
+                provider.clone(),
+                chain_id,
+                signing_key,
+                data_edge_contract,
+                signer_logger.clone(),
+            );
+
+            if let Err(e) = data_edge
+                .post_config_if_changed(&local_config, &monitoring_subgraph, *oracle_index)
+                .await
+            {
+                error!(signer_logger, "Failed to post oracle config to DataEdge";
+                    "error" => format!("{:#}", e)
+                );
+            }
+        }
     }
 
     let ipfs = IpfsImpl::new(
@@ -265,19 +304,19 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
         logger.clone(),
         config.epoch_block_oracle_subgraph.clone(),
     );
-    let contract: Box<dyn StateManager> = if config.dry_run {
-        Box::new(StateManagerDryRun::new(logger.clone()))
-    } else {
+    let contract: Box<dyn StateManager> = if let Some((provider, chain_id)) = rpc {
         state_manager(
+            provider,
+            chain_id,
             config.url,
-            signing_key.as_ref().unwrap(),
+            &signers,
             config.rewards_manager_contract,
             config.subgraph_availability_manager_contract,
-            config.oracle_index,
             logger.clone(),
         )
-        .await
-        .expect("Configuration error: either [`REWARDS_MANAGER_CONTRACT`] or [`SUBGRAPH_AVAILABILITY_MANAGER_CONTRACT` and `ORACLE_INDEX`] must be provided.")
+        .await?
+    } else {
+        Box::new(StateManagerDryRun::new(logger.clone()))
     };
     let grace_period = Duration::from_secs(config.grace_period);
 
@@ -354,38 +393,113 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
     }
 }
 
-// This function is used to create a state manager based on the configuration.
-// If subgraph_availability_manager_contract and oracle_index are provided, it will create a SubgraphAvailabilityManagerContract.
-// If rewards_manager_contract is provided, it will create a RewardsManagerContract.
-// If none of the above are provided, it will return None.
-async fn state_manager(
-    rpc_url: Url,
-    signing_key: &SecretKey,
+fn split_list(value: &Option<String>) -> Vec<String> {
+    match value.as_deref().map(str::trim) {
+        None | Some("") => Vec::new(),
+        Some(value) => value
+            .split(',')
+            .map(|part| part.trim().to_string())
+            .collect(),
+    }
+}
+
+fn parse_indexes(value: &Option<String>) -> Result<Vec<u64>> {
+    split_list(value)
+        .iter()
+        .enumerate()
+        .map(|(position, index)| {
+            u64::from_str(index)
+                .with_context(|| format!("invalid oracle index at position {}", position))
+        })
+        .collect()
+}
+
+fn parse_signers(signing_keys: &[String], oracle_indexes: &[u64]) -> Result<Vec<(SecretKey, u64)>> {
+    ensure!(
+        !signing_keys.is_empty(),
+        "at least one signing key is required unless dry-run"
+    );
+    ensure!(
+        signing_keys.len() == oracle_indexes.len(),
+        "expected one oracle index per signing key, got {} signing keys and {} oracle indexes",
+        signing_keys.len(),
+        oracle_indexes.len()
+    );
+    let mut signers: Vec<(SecretKey, u64)> = Vec::new();
+    for (position, (signing_key, oracle_index)) in
+        signing_keys.iter().zip(oracle_indexes).enumerate()
+    {
+        let signing_key: SecretKey = signing_key
+            .trim()
+            .parse()
+            .with_context(|| format!("invalid signing key at position {}", position))?;
+        ensure!(
+            !signers.iter().any(|(_, i)| i == oracle_index),
+            "duplicate oracle index {}",
+            oracle_index
+        );
+        ensure!(
+            !signers.iter().any(|(k, _)| *k == signing_key),
+            "duplicate signing key at position {}",
+            position
+        );
+        signers.push((signing_key, *oracle_index));
+    }
+    Ok(signers)
+}
+
+fn validate_mode(
+    signers: usize,
     rewards_manager_contract: Option<Address>,
     subgraph_availability_manager_contract: Option<Address>,
-    oracle_index: Option<u64>,
+) -> Result<()> {
+    if subgraph_availability_manager_contract.is_some() {
+        return Ok(());
+    }
+    ensure!(
+        rewards_manager_contract.is_some(),
+        "Configuration error: either `REWARDS_MANAGER_CONTRACT` or `SUBGRAPH_AVAILABILITY_MANAGER_CONTRACT` must be provided"
+    );
+    ensure!(
+        signers == 1,
+        "RewardsManager mode supports a single signing key, got {}",
+        signers
+    );
+    Ok(())
+}
+
+// This function is used to create a state manager based on the configuration.
+// If subgraph_availability_manager_contract is provided, it will create a SubgraphAvailabilityManagerContract per signer.
+// If rewards_manager_contract is provided, it will create a RewardsManagerContract, which supports a single signer.
+async fn state_manager(
+    provider: Provider<Http>,
+    chain_id: u64,
+    rpc_url: Url,
+    signers: &[(SecretKey, u64)],
+    rewards_manager_contract: Option<Address>,
+    subgraph_availability_manager_contract: Option<Address>,
     logger: Logger,
-) -> Option<Box<dyn StateManager>> {
+) -> Result<Box<dyn StateManager>> {
     if let Some(contract_address) = subgraph_availability_manager_contract {
-        if let Some(oracle_index) = oracle_index {
+        let mut signers_out: Vec<Box<dyn OracleSigner + Send + Sync>> = Vec::new();
+        for (signing_key, oracle_index) in signers {
             let contract = SubgraphAvailabilityManagerContract::new(
+                provider.clone(),
+                chain_id,
                 signing_key,
-                rpc_url,
                 contract_address,
-                oracle_index,
-                logger.clone(),
-            )
-            .await;
-            return Some(Box::new(contract));
+                *oracle_index,
+            );
+            signers_out.push(Box::new(contract));
         }
-    } else if let Some(contract_address) = rewards_manager_contract {
-        let contract =
-            RewardsManagerContract::new(signing_key, rpc_url, contract_address, logger.clone())
-                .await;
-        return Some(Box::new(contract));
+        return Ok(Box::new(MultiStateManager::new(signers_out, logger)));
     }
 
-    None
+    let contract_address = rewards_manager_contract.expect("validated by validate_mode");
+    let (signing_key, _) = &signers[0];
+    let contract =
+        RewardsManagerContract::new(signing_key, rpc_url, contract_address, logger.clone()).await;
+    Ok(Box::new(contract))
 }
 
 /// Does the thing that the availablitiy oracle does, namely:
@@ -722,5 +836,146 @@ impl Metrics {
             )
             .unwrap(),
         }
+    }
+}
+
+#[cfg(test)]
+mod signer_tests {
+    use super::*;
+
+    const KEY_A: &str = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    const KEY_B: &str = "59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+
+    fn cli(args: &[&str]) -> Config {
+        let base = [
+            "availability-oracle",
+            "--ipfs",
+            "http://ipfs",
+            "--subgraph",
+            "http://subgraph",
+            "--epoch-block-oracle-subgraph",
+            "http://ebo",
+            "--url",
+            "http://rpc",
+            "--data-edge-contract",
+            "0x0000000000000000000000000000000000000001",
+            "--graph-monitoring-subgraph",
+            "http://monitoring",
+        ];
+        Config::from_iter_safe(base.iter().chain(args.iter())).unwrap()
+    }
+
+    #[test]
+    fn single_signer_config_is_unchanged() {
+        let config = cli(&["--signing-key", KEY_A, "--oracle-index", "2"]);
+        let keys = split_list(&config.signing_key);
+        let indexes = parse_indexes(&config.oracle_index).unwrap();
+        assert_eq!(keys, vec![KEY_A.to_string()]);
+        assert_eq!(indexes, vec![2]);
+
+        let signers = parse_signers(&keys, &indexes).unwrap();
+        assert_eq!(signers.len(), 1);
+        assert_eq!(signers[0].1, 2);
+    }
+
+    #[test]
+    fn multiple_signers_are_paired_by_position() {
+        let keys = format!("{},{}", KEY_A, KEY_B);
+        let config = cli(&["--signing-key", &keys, "--oracle-index", "0,3"]);
+
+        let signers = parse_signers(
+            &split_list(&config.signing_key),
+            &parse_indexes(&config.oracle_index).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(signers.len(), 2);
+        assert_eq!(signers[0], (KEY_A.parse().unwrap(), 0));
+        assert_eq!(signers[1], (KEY_B.parse().unwrap(), 3));
+    }
+
+    #[test]
+    fn cli_flags_override_env() {
+        std::env::set_var("ORACLE_SIGNING_KEY", format!("{},{}", KEY_B, KEY_B));
+        std::env::set_var("ORACLE_INDEX", "7,8");
+        let config = cli(&["--signing-key", KEY_A, "--oracle-index", "2"]);
+        std::env::remove_var("ORACLE_SIGNING_KEY");
+        std::env::remove_var("ORACLE_INDEX");
+
+        assert_eq!(split_list(&config.signing_key), vec![KEY_A.to_string()]);
+        assert_eq!(parse_indexes(&config.oracle_index).unwrap(), vec![2]);
+    }
+
+    #[test]
+    fn mismatched_signers_and_indexes_fail() {
+        let keys = vec![KEY_A.to_string(), KEY_B.to_string()];
+        let err = parse_signers(&keys, &[0]).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("2 signing keys and 1 oracle indexes"));
+
+        let err = parse_signers(&keys[..1], &[]).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("1 signing keys and 0 oracle indexes"));
+    }
+
+    #[test]
+    fn invalid_signing_key_error_does_not_leak_key() {
+        let bad_key = "not-a-key-but-could-be-secret";
+        let keys = vec![KEY_A.to_string(), bad_key.to_string()];
+        let err = parse_signers(&keys, &[0, 3]).unwrap_err();
+        let message = format!("{:#}", err);
+        assert!(message.contains("invalid signing key at position 1"));
+        assert!(!message.contains(bad_key));
+        assert!(!message.contains(KEY_A));
+    }
+
+    #[test]
+    fn whitespace_around_values_is_trimmed() {
+        let keys = format!(" {} , {} ", KEY_A, KEY_B);
+        let config = cli(&["--signing-key", &keys, "--oracle-index", " 0 , 3 "]);
+        let indexes = parse_indexes(&config.oracle_index).unwrap();
+        assert_eq!(indexes, vec![0, 3]);
+        let signers = parse_signers(&split_list(&config.signing_key), &indexes).unwrap();
+        assert_eq!(signers[0], (KEY_A.parse().unwrap(), 0));
+        assert_eq!(signers[1], (KEY_B.parse().unwrap(), 3));
+    }
+
+    #[test]
+    fn duplicate_oracle_indexes_fail() {
+        let keys = vec![KEY_A.to_string(), KEY_B.to_string()];
+        let err = parse_signers(&keys, &[1, 1]).unwrap_err();
+        assert!(err.to_string().contains("duplicate oracle index 1"));
+    }
+
+    #[test]
+    fn duplicate_signing_keys_fail_without_leaking_key() {
+        let keys = vec![KEY_A.to_string(), KEY_A.to_string()];
+        let err = parse_signers(&keys, &[0, 1]).unwrap_err();
+        let message = format!("{:#}", err);
+        assert!(message.contains("duplicate signing key at position 1"));
+        assert!(!message.contains(KEY_A));
+    }
+
+    #[test]
+    fn rewards_manager_rejects_multiple_signers() {
+        let err = validate_mode(2, Some(Address::zero()), None).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("RewardsManager mode supports a single signing key, got 2"));
+    }
+
+    #[test]
+    fn missing_contract_fails() {
+        let err = validate_mode(1, None, None).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Configuration error: either `REWARDS_MANAGER_CONTRACT` or `SUBGRAPH_AVAILABILITY_MANAGER_CONTRACT` must be provided"
+        );
+    }
+
+    #[test]
+    fn availability_manager_accepts_multiple_signers() {
+        validate_mode(2, None, Some(Address::zero())).unwrap();
     }
 }
