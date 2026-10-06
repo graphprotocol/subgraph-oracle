@@ -16,7 +16,7 @@ pub enum ConfigStatus {
 use ethers::core::types::U256;
 use ethers::middleware::SignerMiddleware;
 use ethers::providers::{Http, Middleware, Provider};
-use ethers::signers::{LocalWallet, Signer};
+use ethers::signers::LocalWallet;
 use ethers::types::TransactionRequest;
 use secp256k1::SecretKey;
 use std::sync::Arc;
@@ -45,6 +45,7 @@ pub fn extract_deployment_id_from_url(url: &str) -> Result<String, Error> {
 }
 
 /// Configuration needed to build an OracleConfig from CLI parameters.
+#[derive(Clone, Copy)]
 pub struct OracleConfigParams<'a> {
     pub ipfs_concurrency: usize,
     pub ipfs_timeout: Duration,
@@ -113,29 +114,19 @@ pub struct DataEdgeContract {
 }
 
 impl DataEdgeContract {
-    pub async fn new(
+    pub fn new(
+        provider: Provider<Http>,
+        chain_id: u64,
         signing_key: &SecretKey,
-        rpc_url: Url,
         contract_address: Address,
         logger: Logger,
-    ) -> Result<Self, Error> {
-        let http_client = reqwest::ClientBuilder::new()
-            .tcp_nodelay(true)
-            .timeout(Duration::from_secs(30))
-            .build()
-            .unwrap();
-        let provider = Provider::new(Http::new_with_client(rpc_url, http_client));
-        let chain_id = provider.get_chainid().await?.as_u64();
-        let wallet = LocalWallet::from_bytes(signing_key.as_ref())
-            .unwrap()
-            .with_chain_id(chain_id);
-        let provider = Arc::new(SignerMiddleware::new(provider, wallet));
-
-        Ok(Self {
+    ) -> Self {
+        let provider = crate::contract::signer_middleware(provider, signing_key, chain_id);
+        Self {
             provider,
             contract_address,
             logger,
-        })
+        }
     }
 
     /// Posts the oracle configuration to the DataEdge contract if it has changed.
@@ -148,25 +139,22 @@ impl DataEdgeContract {
     ) -> Result<bool, Error> {
         match check_config_status(local_config, monitoring_subgraph, oracle_index).await {
             ConfigStatus::Unchanged => {
-                info!(self.logger, "Config unchanged, skipping DataEdge post";
-                    "oracle_index" => oracle_index
-                );
+                info!(self.logger, "Config unchanged, skipping DataEdge post");
                 return Ok(false);
             }
             ConfigStatus::Changed(changed_fields) => {
                 info!(self.logger, "Config changed, will post to DataEdge";
-                    "oracle_index" => oracle_index,
                     "changed_fields" => changed_fields.join(",")
                 );
             }
             ConfigStatus::NotFound => {
-                info!(self.logger, "Oracle not found in subgraph, posting initial config";
-                    "oracle_index" => oracle_index
+                info!(
+                    self.logger,
+                    "Oracle not found in subgraph, posting initial config"
                 );
             }
             ConfigStatus::FetchError(e) => {
                 warn!(self.logger, "Failed to fetch current oracle config from subgraph, will post anyway";
-                    "oracle_index" => oracle_index,
                     "error" => format!("{:#}", e)
                 );
             }
@@ -265,6 +253,7 @@ pub async fn log_dry_run_config(
             }
             ConfigStatus::FetchError(e) => {
                 warn!(logger, "Failed to fetch current config (dry-run)";
+                    "oracle_index" => oracle_index,
                     "error" => format!("{:#}", e)
                 );
             }
