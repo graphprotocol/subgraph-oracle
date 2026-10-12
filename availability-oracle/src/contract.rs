@@ -6,7 +6,7 @@ use ethers::{
     contract::abigen,
     core::types::U256,
     middleware::SignerMiddleware,
-    providers::{Http, Middleware, Provider},
+    providers::{Http, JsonRpcClient, Middleware, PendingTransaction, Provider},
     signers::{LocalWallet, Signer},
 };
 use secp256k1::SecretKey;
@@ -21,6 +21,24 @@ pub trait StateManager {
 }
 
 abigen!(RewardsManagerABI, "src/abi/RewardsManager.abi.json");
+
+/// How long a submitted transaction may stay unmined before the signer gives up on it.
+const CONFIRMATION_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Waits for the receipt and fails if the transaction is dropped, reverted or not mined in time.
+async fn confirmed<P: JsonRpcClient>(pending: PendingTransaction<'_, P>) -> Result<(), Error> {
+    let tx_hash = *pending;
+    let receipt = tokio::time::timeout(CONFIRMATION_TIMEOUT, pending)
+        .await
+        .map_err(|_| anyhow!("tx {:?} unmined after {:?}", tx_hash, CONFIRMATION_TIMEOUT))??
+        .ok_or_else(|| anyhow!("tx {:?} dropped from the mempool", tx_hash))?;
+    ensure!(
+        receipt.status == Some(1u64.into()),
+        "tx {:?} reverted on chain",
+        tx_hash
+    );
+    Ok(())
+}
 abigen!(
     SubgraphAvailabilityManagerABI,
     "src/abi/SubgraphAvailabilityManager.abi.json"
@@ -132,11 +150,8 @@ impl StateManager for RewardsManagerContract {
             let gas_price = self.contract.client().get_gas_price().await?;
             let gas_price_with_buffer = gas_price * U256::from(120) / U256::from(100);
 
-            tx.gas(increased_estimate)
-                .gas_price(gas_price_with_buffer)
-                .send()
-                .await?
-                .await?;
+            let tx = tx.gas(increased_estimate).gas_price(gas_price_with_buffer);
+            confirmed(tx.send().await?).await?;
             METRICS.denied_subgraphs_total.inc_by(num_subgraphs);
         }
 
@@ -197,12 +212,8 @@ impl SubgraphAvailabilityManagerContract {
         let gas_price = self.contract.client().get_gas_price().await?;
         let gas_price_with_buffer = gas_price * U256::from(120) / U256::from(100);
 
-        tx.gas(increased_estimate)
-            .gas_price(gas_price_with_buffer)
-            .send()
-            .await?
-            .await?;
-
+        let tx = tx.gas(increased_estimate).gas_price(gas_price_with_buffer);
+        confirmed(tx.send().await?).await?;
         Ok(())
     }
 }
@@ -333,7 +344,46 @@ impl Metrics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ethers::types::{Transaction, TransactionReceipt, TxHash};
     use std::sync::Mutex;
+
+    async fn confirm_mocked(responses: &[serde_json::Value]) -> Result<(), Error> {
+        let (provider, mock) = Provider::mocked();
+        // The mock serves responses last-in first-out.
+        for response in responses.iter().rev() {
+            mock.push(response.clone()).unwrap();
+        }
+        let pending = PendingTransaction::new(TxHash::zero(), &provider)
+            .interval(Duration::from_millis(1))
+            .retries(0);
+        confirmed(pending).await
+    }
+
+    #[tokio::test]
+    async fn dropped_transaction_is_an_error() {
+        let err = confirm_mocked(&[serde_json::Value::Null])
+            .await
+            .unwrap_err();
+        assert!(format!("{:#}", err).contains("dropped from the mempool"));
+    }
+
+    #[tokio::test]
+    async fn reverted_transaction_is_an_error() {
+        let mined = Transaction {
+            block_number: Some(1.into()),
+            ..Default::default()
+        };
+        let reverted = TransactionReceipt {
+            status: Some(0.into()),
+            ..Default::default()
+        };
+        let responses = [
+            serde_json::to_value(mined).unwrap(),
+            serde_json::to_value(reverted).unwrap(),
+        ];
+        let err = confirm_mocked(&responses).await.unwrap_err();
+        assert!(format!("{:#}", err).contains("reverted on chain"));
+    }
 
     struct MockSigner {
         index: u64,
