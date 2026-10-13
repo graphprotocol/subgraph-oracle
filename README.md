@@ -39,7 +39,7 @@ OPTIONS:
             Minimum signal for a subgraph to be checked [env: ORACLE_MIN_SIGNAL=]  [default: 100]
 
         --oracle-index <oracle-index>
-            Assigned index for the oracle, to be used when voting on SubgraphAvailabilityManager [env: ORACLE_INDEX=]
+            Comma separated oracle indexes, to be used when voting on SubgraphAvailabilityManager. Paired by position with --signing-key [env: ORACLE_INDEX=]
 
         --period <period>
             How often the oracle should check the subgraphs. With the default value of 0, the oracle will run once and terminate [env: ORACLE_PERIOD_SECS=]  [default: 0]
@@ -48,7 +48,7 @@ OPTIONS:
             The address of the rewards manager contract [env: REWARDS_MANAGER_CONTRACT=]
 
         --signing-key <signing-key>
-            The secret key of the oracle for signing transactions [env: ORACLE_SIGNING_KEY=]
+            Comma separated secret keys of the oracle signers, paired by position with --oracle-index [env: ORACLE_SIGNING_KEY=]
 
         --subgraph <subgraph>
             Graphql endpoint to the network subgraph [env: ORACLE_SUBGRAPH=]
@@ -91,6 +91,21 @@ cargo run -p availability-oracle -- \
     --data-edge-contract <data-edge-address> \
     --graph-monitoring-subgraph <graph-monitoring-subgraph-url>
 ```
+
+### Running with multiple signers
+
+An oracle can vote on `SubgraphAvailabilityManager` with several signers from a single instance. Each signer must be registered in the contract at its own oracle index. Pass the keys and indexes as comma separated lists, paired by position:
+
+```
+ORACLE_SIGNING_KEY=<signing-key-a>,<signing-key-b>
+ORACLE_INDEX=<index-a>,<index-b>
+```
+
+Spaces around commas are ignored. Duplicate keys or indexes are rejected at startup, and `--dry-run` validates them when keys are given.
+
+Every signer posts its own configuration to the DataEdge contract and submits the same votes, concurrently. Configuration errors fail at startup, before any transaction is sent. Runtime failures of a single signer (DataEdge post, reverted vote, RPC, insufficient funds) are logged with its `oracle_index` and do not stop the other signers; a run fails only if every signer fails. `RewardsManager` mode supports a single signer.
+
+Per-signer metrics: `signer_votes_total{oracle_index}` and `signer_vote_failures_total{oracle_index}`. `denied_subgraphs_total` counts each change once, regardless of the number of signers.
 
 ### Example command to run `RewardsManager` configuration:
 

@@ -25,7 +25,7 @@ pub use futures::{
 };
 pub use never::Never;
 pub use prometheus::Counter;
-pub use slog::{error, info, trace, warn, Logger};
+pub use slog::{error, info, o, trace, warn, Logger};
 pub use std::convert::{TryFrom, TryInto};
 pub type Bytes32 = [u8; 32];
 pub use lazy_static::lazy_static;
