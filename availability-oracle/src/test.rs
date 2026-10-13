@@ -61,10 +61,36 @@ mod tests {
                 "file/ipfs".into(),
                 "substreams".into(),
             ],
-            vec![],
+            &mut vec![],
         )
         .await
         .unwrap();
+    }
+
+    // The valid deployments are cached even though voting failed.
+    #[tokio::test]
+    async fn test_cache_survives_failed_vote() {
+        let mut cache = vec![];
+        crate::reconcile_deny_list(
+            &common::logging::create_logger(),
+            &MockIpfs,
+            &FailingStateManager,
+            Arc::new(MockSubgraph),
+            0,
+            Duration::default(),
+            Arc::new(MockEBOSubgraph),
+            &vec![
+                "ethereum".into(),
+                "ethereum/contract".into(),
+                "file/ipfs".into(),
+                "substreams".into(),
+            ],
+            &mut cache,
+        )
+        .await
+        .unwrap_err();
+        let cached: Vec<String> = cache.iter().map(|(cid, _)| cid.to_string()).collect();
+        assert_eq!(cached, [ONE, FOUR, SUBSTREAM, FILE_DS]);
     }
 
     struct MockSubgraph;
@@ -141,6 +167,15 @@ mod tests {
 
         fn invalidate_cache(&self) {
             unreachable!("invalidate cache");
+        }
+    }
+
+    struct FailingStateManager;
+
+    #[async_trait]
+    impl contract::StateManager for FailingStateManager {
+        async fn deny_many(&self, _denied_status: Vec<([u8; 32], bool)>) -> Result<(), Error> {
+            Err(anyhow!("vote failed"))
         }
     }
 

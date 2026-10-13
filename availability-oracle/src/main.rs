@@ -346,17 +346,11 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
                 grace_period,
                 epoch_subgraph.clone(),
                 &config.supported_data_source_kinds,
-                valid_deployment_cache.clone(),
+                &mut valid_deployment_cache,
             )
             .await
             {
-                Ok(updated_deployment_cache) => {
-                    METRICS.reconcile_runs_ok.inc();
-                    valid_deployment_cache = updated_deployment_cache;
-                    info!(logger, "Deployment cache updated";
-                        "count" => valid_deployment_cache.len()
-                    );
-                }
+                Ok(()) => METRICS.reconcile_runs_ok.inc(),
                 Err(e) => {
                     METRICS.reconcile_runs_err.inc();
                     error!(logger, "Error, reconciliation aborted"; "error" => format!("{:#}", e))
@@ -375,7 +369,7 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
             ipfs.invalidate_cache();
         }
     }
-    match reconcile_deny_list(
+    reconcile_deny_list(
         &logger,
         &ipfs,
         &*contract,
@@ -384,13 +378,9 @@ async fn run(logger: Logger, config: Config) -> Result<()> {
         grace_period,
         epoch_subgraph.clone(),
         &config.supported_data_source_kinds,
-        Vec::new(),
+        &mut Vec::new(),
     )
     .await
-    {
-        Ok(_) => return Ok(()),
-        Err(e) => return Err(e),
-    }
 }
 
 fn split_list(value: &Option<String>) -> Vec<String> {
@@ -506,6 +496,9 @@ async fn state_manager(
 /// 1. Grab the list of all deployments over the curation threshold from the subgraph.
 /// 2. Check if their availability status changed.
 /// 3. Update the deny list accordingly.
+///
+/// The cache of valid deployments is refreshed before voting, so a failed vote
+/// does not leave it to expire.
 pub async fn reconcile_deny_list(
     logger: &Logger,
     ipfs: &impl Ipfs,
@@ -515,8 +508,8 @@ pub async fn reconcile_deny_list(
     grace_period: Duration,
     epoch_subgraph: Arc<impl EpochBlockOracleSubgraph>,
     supported_ds_kinds: &[String],
-    valid_deployment_cache: Vec<(Cid, SystemTime)>,
-) -> Result<Vec<(Cid, SystemTime)>, Error> {
+    valid_deployment_cache: &mut Vec<(Cid, SystemTime)>,
+) -> Result<(), Error> {
     let logger = logger.clone();
 
     // Fetch supported networks
@@ -563,7 +556,7 @@ pub async fn reconcile_deny_list(
             };
         })
         .buffered(100)
-        .try_filter_map(move |(deployment, validity, last_validated)| {
+        .try_filter_map(|(deployment, validity, last_validated)| {
             let logger = logger.clone();
             async move {
                 info!(logger, "Check subgraph";
@@ -605,24 +598,22 @@ pub async fn reconcile_deny_list(
         .try_collect()
         .await?;
 
+    *valid_deployment_cache = deployment_status
+        .iter()
+        .filter(|(_, should_deny, _, _)| !*should_deny)
+        .map(|(cid, _, _, last_validated)| (bytes32_to_cid_v0(*cid), *last_validated))
+        .collect();
+    info!(logger, "Deployment cache updated";
+        "count" => valid_deployment_cache.len()
+    );
+
     // Flip on chain status for those deployments that changed
     let changed_deployments = deployment_status
         .iter()
         .filter(|(_, _, status_changed, _)| *status_changed)
         .map(|(cid, should_deny, _, _)| (*cid, *should_deny))
         .collect();
-    match state_manager.deny_many(changed_deployments).await {
-        Ok(_) => {}
-        Err(e) => return Err(e),
-    };
-
-    // Return updated deployment cache
-    let updated_deployment_cache: Vec<(Cid, SystemTime)> = deployment_status
-        .iter()
-        .filter(|(_, should_deny, _, _)| !*should_deny)
-        .map(|(cid, _, _, last_validated)| (bytes32_to_cid_v0(*cid), *last_validated))
-        .collect();
-    Ok(updated_deployment_cache)
+    state_manager.deny_many(changed_deployments).await
 }
 
 enum Valid {
